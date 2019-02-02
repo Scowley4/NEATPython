@@ -31,23 +31,31 @@ class Population:
 class Genome:
     """"""
     def __init__(self):
-        self.genes = []
+        self.link_genes = []
+        self.node_genes = []
         self.fitness = None
         self.adj_fitness = None
 
     def copy(self):
         new_genome = Genome()
-        new_genome.genes = [gene.copy() for gene in self.genes]
+        new_genome.link_genes = [gene.copy() for gene in self.link_genes]
+        new_genome.node_genes = [gene.copy() for gene in self.node_genes]
         new_genome.fitness = self.fitness
         new_genome.adj_fitness = self.adj_fitness
         return new_genome
 
     def add_random_node(self):
-        connection_gene = random.choice(self.genes)
+        connection_gene = random.choice(self.link_genes)
 
         # Disable the connection
         connection_gene.enabled = False
 
+        # New node gene
+        node_id = len(node_genes) + 1
+        innov_num = get_node_innov_num(node_id)
+        new_node = NodeGene(node_id,innov_num)
+        self.node_genes.append(new_node)
+        
         # Two new connections
         gene1 = None
 
@@ -63,7 +71,7 @@ class Genome:
         new_genome.add_node()
 
 
-class Gene:
+class LinkGene:
     """"""
     def __init__(self, from_node, to_node, weight, innov, enabled=True):
         self.from_node = from_node
@@ -76,3 +84,9 @@ class Gene:
 
     def copy(self):
         return Gene(*self.attrs)
+
+class NodeGene:
+    """""""
+    def __init__(self,node_id,innov):
+        self.node_id = node_id
+        self.innov = innov
