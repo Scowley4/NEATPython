@@ -178,7 +178,7 @@ class LinkGene:
         self.attrs = (from_node, to_node, weight, innov, enabled)
 
     def copy(self):
-        return Gene(*self.attrs)
+        return LinkGene(*self.attrs)
 
 # Potentially just a data class
 class NodeGene:
@@ -200,4 +200,16 @@ class Innovation:
         self.old_innov_num = None
         self.recursive = None
         pass
+
+    def __eq__(self, other):
+        return (
+                (self.node_in == other.node_in) and
+                (self.node_out == other.node_out) and
+                (self.innov_num_1 == other.innov_num_1) and
+                (self.innov_num_2 == other.innov_num_2) and
+                (self.new_weight == other.new_weight) and
+                (self.newnode_id == other.newnode_id) and
+                (self.old_innov_num == other.old_innov_num) and
+                (self.recursive == other.recursive)
+               )
 
