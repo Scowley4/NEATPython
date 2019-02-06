@@ -27,6 +27,31 @@ class Population:
     def reproduce(self):
         reps = [random.choice(spec) for spec in self.species]
 
+class Species:
+    """"""
+    def __init__(self):
+        self.id = None
+        self.start_gen = 0
+        self.average_fitness = None
+        self.gens_since_improvement = 0
+        self.genomes = None
+        pass
+
+    def get_champion(self):
+        pass
+
+    def get_random(self):
+        pass
+
+    def get_next_gen(self, num_offspring):
+        # interspecies offspring?
+        # mutation
+        # crossover
+        pass
+
+
+
+
 
 class Genome:
     """"""
@@ -35,6 +60,7 @@ class Genome:
         self.node_genes = []
         self.fitness = None
         self.adj_fitness = None
+        self.species_hint = None
 
     def copy(self):
         new_genome = Genome()
@@ -55,7 +81,7 @@ class Genome:
         innov_num = get_node_innov_num(node_id)
         new_node = NodeGene(node_id,innov_num)
         self.node_genes.append(new_node)
-        
+
         # Two new connections
         gene1 = None
 
@@ -69,6 +95,12 @@ class Genome:
         new_genome = self.copy()
 
         new_genome.add_node()
+
+    def get_network(self):
+        """Returns the network representation of this genome (the phenotype)"""
+        # TODO DJ
+        # Figure out how activations propogate
+        pass
 
 
 class LinkGene:
@@ -86,7 +118,7 @@ class LinkGene:
         return Gene(*self.attrs)
 
 class NodeGene:
-    """""""
-    def __init__(self,node_id,innov):
+    """"""
+    def __init__(self, node_id, innov):
         self.node_id = node_id
         self.innov = innov
