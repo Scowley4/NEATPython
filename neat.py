@@ -16,6 +16,8 @@ class Population:
         self.c1 = c1 # Excess gene coefficient
         self.c2 = c2 # Disjoin gene coefficient
         self.c3 = c3 # Weight different coefficient
+        self.species_dropoff_age = 15 #Not sure about this
+
 
         self.species = dict()
         self.population = []
@@ -79,10 +81,6 @@ class Population:
 
         Organisms not compatible with any spec start a new spec."""
 
-        # Delete species that haven't improved
-        for spec_num, spec in list(self.species.items()):
-            if self.gen_num - spec.last_improved_gen > 15:
-                self.species.pop(spec_num)
 
         # Clear out the previous generation
         for spec in self.species.values():
@@ -109,6 +107,11 @@ class Population:
                 self.species.pop(spec_num)
 
 
+    def remove_unimproved_species(self):
+        """Removes all species that haven't improved for some time"""
+        for spec_num, spec in list(self.species.items()):
+            if self.gen_num - spec.last_improved_gen > 15:
+                self.species.pop(spec_num)
 
     def reproduce(self):
         # reps = [random.choice(spec) for spec in self.species]
