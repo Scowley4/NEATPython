@@ -64,25 +64,28 @@ class Species:
     def add_genome(self, genome):
         self.genomes.add(genome)
 
-    def sort_genomes(self):
-        pass
+    def sort_genomes(self, reverse=True):
+        """Sorts the gnomes by fitness.
+
+        Defaults to sorting highest to lowest."""
+        self.genomes.sort(key=lambda genome: genome.get_fitness(), reverse=reverse)
 
     def get_average_fitness(self):
         pass
 
     def get_champion(self):
-        pass
+        return max(self.genomes, key=lambda genome: genome.get_fitness())
 
-    def get_random(self):
-        pass
+    def get_random_genome(self):
+        return random.choice(self.genomes)
 
-    def get_next_gen(self, num_offspring):
-        # interspecies offspring?
-        # mutation
-        # crossover
+    def get_next_generation(self, num_offspring):
         pass
 
     def reproduce(self):
+        # interspecies offspring?
+        # mutation
+        # crossover
         pass
 
     def adjust_fitness(self):
@@ -100,6 +103,9 @@ class Genome:
         self.adj_fitness = None
         self.species_hint = None # id of the genome's parent species
 
+    def get_fitness(self):
+        return self.fitness
+
     def copy(self):
         new_genome = Genome()
         new_genome.link_genes = [gene.copy() for gene in self.link_genes]
@@ -107,6 +113,22 @@ class Genome:
         new_genome.fitness = self.fitness
         new_genome.adj_fitness = self.adj_fitness
         return new_genome
+
+    def calculate_compatibility(self, other):
+
+        # Get the number of genes for each
+        gene_count1 = self.get_gene_count()
+        gene_count2 = other.get_gene_count()
+
+        # They do not use this N in their code, even though they explain it
+        # this way in their paper.
+        # genetics.cpp:2273
+        N = min(gene_count1, gene_count2)
+        N = N if max(gene_count1, gene_count2)>20 else 1
+
+        pass
+
+
 
     def mutate_add_node(self):
         link_gene = random.choice(self.link_genes)
