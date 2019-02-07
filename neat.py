@@ -17,12 +17,24 @@ class Population:
         self.c2 = c2 # Disjoin gene coefficient
         self.c3 = c3 # Weight different coefficient
 
-        self.species = []
-        self.innovation_num = -1
+        self.species = dict()
+        self.population = []
+        self.gen_num = 0
+        self.species_num = -1
+        self.innov_num = -1
+        self.node_num = -1
 
-    def get_next_innovation(self):
-        self.innovation_num += 1
-        return self.innovation_num
+    def get_next_species_num(self):
+        self.species_num += 1
+        return self.species_num
+
+    def get_next_innov_num(self):
+        self.innov += 1
+        return self.innov
+
+    def get_next_node_num(self):
+        self.node_num += 1
+        return self.node_num
 
     def compute_pop_fitness(self, fitness_func):
         for spec in species:
@@ -30,20 +42,73 @@ class Population:
                 genome.fitness = fitness_func(genome)
                 genome.adj_fitness = genome.fitness/len(spec)
 
-    def spawn_initial(self):
+    def spawn_initial_population(self, inputs, outputs):
         """Population of all the same topology with weights slightly
         perturbed"""
         # See genetics.cpp:2498
+        # In their code, they initialize a genome from a file and use that to
+        # make the initial population.
+
+        # I would prefer to start with no connections and mutate the
+        # connections in as needed.
+        in_nodes = [NodeGene(self.get_next_node_num(), is_sensor=True)
+        out_nodes = [NodeGene(self.get_next_node_num(), is_sensor=False)
+        links = []
+
+        # Make the first genome
+        genesis_genome = Genome(nodes=in_nodes+out_nodes, links=links)
+
+        # Make the population just this genome
+        self.population = [genesis_genome]
+
+        # Make the first spec
+        spec_num = self.get_next_species_num()
+        spec = Species(spec_num, self.gen_num)
+        spec.add_genome(genesis_genome)
+
+        self.species[spec_num] = spec
+
+
 
     def speciate(self):
         """Separates organisms into species.
 
-        Checks compatibility of each organism against each species, using the
+        Checks compatibility of each organism against each spec, using the
         species_hint to speed up iteration, as stated in
         https://www.cs.ucf.edu/~kstanley/neat.html .
 
-        Organisms not compatible with any species start a new species."""
-        pass
+        Organisms not compatible with any spec start a new spec."""
+
+        # Delete species that haven't improved
+        for spec_num, spec in list(self.species.items()):
+            if self.gen_num - spec.last_improved_gen > 15:
+                self.species.pop(spec_num)
+
+        # Clear out the previous generation
+        for spec in self.species.values():
+            # spec.flush?
+            pass
+
+        for genome in self.population:
+            if genome.species_hint is not None:
+                # check compatibility with that species champion
+                pass
+            else:
+                for spec in self.species:
+                    # check compatibility until found
+                    pass
+                else: # make a new spec
+                    spec_num = self.get_next_species_num()
+                    spec = Species(spec_num, self.gen_num)
+                    spec.add_genome(genome)
+                    self.species[spec_num] = spec
+
+        # Delete unnecessary species
+        for spec_num, spec in list(self.species.items()):
+            if len(spec)==0:
+                self.species.pop(spec_num)
+
+
 
     def reproduce(self):
         # reps = [random.choice(spec) for spec in self.species]
@@ -53,13 +118,16 @@ class Population:
 
 class Species:
     """"""
-    def __init__(self):
-        self.id = None
-        self.start_gen = 0
+    def __init__(self, species_num, start_gen):
+        self.species_num = species_num
+        self.start_gen = start_gen
         self.average_fitness = None
-        self.gens_since_improvement = 0
+        self.last_improved_gen = 0
         self.genomes = []
         pass
+
+    def __len__(self):
+        return len(self.genomes)
 
     def add_genome(self, genome):
         self.genomes.add(genome)
@@ -96,9 +164,13 @@ class Species:
 
 class Genome:
     """"""
-    def __init__(self):
-        self.link_genes = []
+    c1 = 1
+    c2 = 1
+    c3 = 1
+
+    def __init__(self, nodes, links):
         self.node_genes = []
+        self.link_genes = []
         self.fitness = None
         self.adj_fitness = None
         self.species_hint = None # id of the genome's parent species
@@ -108,8 +180,8 @@ class Genome:
 
     def copy(self):
         new_genome = Genome()
-        new_genome.link_genes = [gene.copy() for gene in self.link_genes]
         new_genome.node_genes = [gene.copy() for gene in self.node_genes]
+        new_genome.link_genes = [gene.copy() for gene in self.link_genes]
         new_genome.fitness = self.fitness
         new_genome.adj_fitness = self.adj_fitness
         return new_genome
@@ -205,9 +277,9 @@ class LinkGene:
 # Potentially just a data class
 class NodeGene:
     """"""
-    def __init__(self, node_id, innov):
+    def __init__(self, node_id, is_sensor=False):
         self.node_id = node_id
-        self.innov = innov
+        self.is_sensor = is_sensor
 
 # Potentially just a data class
 class Innovation:
