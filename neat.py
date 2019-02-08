@@ -139,13 +139,13 @@ class Species:
         """Sorts the gnomes by fitness.
 
         Defaults to sorting highest to lowest."""
-        self.genomes.sort(key=lambda genome: genome.get_fitness(), reverse=reverse)
+        self.genomes.sort(key=lambda g: g.get_ordering(), reverse=reverse)
 
     def get_average_fitness(self):
         pass
 
     def get_champion(self):
-        return max(self.genomes, key=lambda genome: genome.get_fitness())
+        return max(self.genomes, key=lambda g: g.get_ordering())
 
     def get_random_genome(self):
         return random.choice(self.genomes)
@@ -183,6 +183,11 @@ class Species:
 
 class Genome:
     """"""
+    # I think the parameters actually belong to the genome to rank it's
+    # compatibility with other genomes. Since we don't really want to have to
+    # give each genome the parameters (waste of memory and it's verbose), maybe
+    # make them class parameters and have the containing class own the class or
+    # modify the parameters on this class? Not quite sure.
     c1 = 1
     c2 = 1
     c3 = 1
@@ -194,8 +199,18 @@ class Genome:
         self.adj_fitness = None
         self.species_hint = None # id of the genome's parent species
 
+
+    def __lt__(self, other):
+        # This would order the genomes as in the paper, with fitness as first
+        # criterion and # of link genes as second.
+        return ((self.fitness, -len(self.link_genes)) <
+                (other.fitness, -len(other.link_genes)))
+
     def get_fitness(self):
         return self.fitness
+
+    def get_ordering(self):
+        return (self.fitness, -len(self.link_genes))
 
     def copy(self):
         new_genome = Genome()
