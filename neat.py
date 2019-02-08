@@ -157,12 +157,28 @@ class Species:
         # interspecies offspring?
         # mutation
         # crossover
+
+        # genetics.cpp:3419 - If species gets more than 5 offspring,
+        # clone the species champ
+
+        # genetics.cpp:3579 - interspecies mating tends toward better species.
+        # This is juged based on the species size (since this indirectly
+        # represents the fitness of the species).
+        # dad (parent 2) is the species champ of other species
+
+        # genetics.cpp:1354 - Between two parents, first order in higher
+        # fitness, second ordering is lower gene count.
+        # Looks like if the fitness and the gene count is the same, they just
+        # use the second parents excess/disjoin (as if it was better). Very
+        # arbitrary.
+
+
         pass
 
     def adjust_fitness(self):
-        # NOTE I don't believe this is found in the paper
         # see genetics.cpp:2668 "Can change the fitness of the organisms in the
         # species to be higher for very new species (to protect them)"
+        # NOTE I don't believe this is found in the paper
         pass
 
 class Genome:
@@ -252,7 +268,10 @@ class Genome:
         # Disabled in either parent means 75% chance of disabled in child
         pass
 
-    def get_compatibility(self, other):
+    def get_disjoin(self, other):
+        pass
+
+    def get_excess(self, other):
         pass
 
     def get_network(self):
