@@ -127,27 +127,31 @@ class Species:
         self.average_fitness = None
         self.last_improved_gen = 0
         self.genomes = []
-        pass
 
     def __len__(self):
         return len(self.genomes)
 
     def add_genome(self, genome):
+        """Adds a genome to the species."""
         self.genomes.add(genome)
 
     def sort_genomes(self, reverse=True):
-        """Sorts the gnomes by fitness.
+        """Sorts the gnomes inplace.
 
-        Defaults to sorting highest to lowest."""
-        self.genomes.sort(key=lambda g: g.get_ordering(), reverse=reverse)
+        Defaults to sorting highest to lowest. Uses the __lt__ function on
+        the Genome class.
+        """
+        self.genomes.sort(reverse=reverse)
 
     def get_average_fitness(self):
-        pass
+        return sum(g.fitness for g in self.genomes)/len(self.genomes)
 
     def get_champion(self):
-        return max(self.genomes, key=lambda g: g.get_ordering())
+        """Returns the best genome in the species."""
+        return max(self.genomes)
 
     def get_random_genome(self):
+        """Chooses a uniform random genome from the species."""
         return random.choice(self.genomes)
 
     def get_next_generation(self, num_offspring):
@@ -209,15 +213,14 @@ class Genome:
     def get_fitness(self):
         return self.fitness
 
-    def get_ordering(self):
-        return (self.fitness, -len(self.link_genes))
-
     def copy(self):
+        """Performs a deep copy of the genome."""
         new_genome = Genome()
         new_genome.node_genes = [gene.copy() for gene in self.node_genes]
         new_genome.link_genes = [gene.copy() for gene in self.link_genes]
         new_genome.fitness = self.fitness
         new_genome.adj_fitness = self.adj_fitness
+        new_genome.species_hint = self.species_hint
         return new_genome
 
     def calculate_compatibility(self, other):
