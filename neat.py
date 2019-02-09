@@ -240,6 +240,7 @@ class Genome:
 
 
     def mutate_add_node(self):
+        # genetics.cpp:819 Genome::mutate_add_node
         link_gene = random.choice(self.link_genes)
 
         # Disable the link
@@ -264,6 +265,11 @@ class Genome:
 
     def mutate_gene_reenable(self):
         # Not sure why the naming is different from the above
+
+        # genetics.cpp:797 - Just finds the "first" disabled gene and reenables
+        # it. Not sure if the genes are sorted in any meaningful way other than
+        # when they were added? "First" in this case means the first in the
+        # list of genes, NOT the gene that was first disabled.
         pass
 
     def mutate_add_link(self):
@@ -287,9 +293,25 @@ class Genome:
         pass
 
     def get_disjoin(self, other):
+        """Returns the <> that are disjoin from this genome.
+
+        Disjoin genes are genes within the max innovation number of P1 that are
+        not included in P1. Shown below as D3.
+
+        P1 - G1 G2    G4
+        P2 - G1 G2 D3 G4 E5
+        """
         pass
 
     def get_excess(self, other):
+        """Returns the <> that are excess to this genome
+
+        Excess genes are genes outside the max innovation number of P1. Shown
+        below as E5.
+
+        P1 - G1 G2    G4
+        P2 - G1 G2 D3 G4 E5
+        """
         pass
 
     def get_network(self):
@@ -333,7 +355,6 @@ class Innovation:
         self.newnode_id = None
         self.old_innov_num = None
         self.recursive = None
-        pass
 
     def __eq__(self, other):
         return (
