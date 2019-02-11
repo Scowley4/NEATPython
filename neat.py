@@ -292,16 +292,21 @@ class Genome:
         # Disabled in either parent means 75% chance of disabled in child
         pass
 
-    def get_disjoin(self, other):
-        """Returns the <> that are disjoin from this genome.
+    def get_disjoint(self, other):
+        # Wasn't sure if this should return the genes, the innov numbers, or
+        # the Innovations
+        """Returns the <> that are disjoint from this genome.
 
-        Disjoin genes are genes within the max innovation number of P1 that are
+        Disjoint genes are genes within the max innovation number of P1 that are
         not included in P1. Shown below as D3.
 
         P1 - G1 G2    G4
         P2 - G1 G2 D3 G4 E5
         """
-        pass
+        innovs = {g.innov_num for g in self.link_genes)
+        max_innov = max(innovs)
+        return [g.innov_num for g in other.link_genes
+                if g.innov_num < max_innov and g.innov_num not in innovs]
 
     def get_excess(self, other):
         """Returns the <> that are excess to this genome
@@ -312,7 +317,10 @@ class Genome:
         P1 - G1 G2    G4
         P2 - G1 G2 D3 G4 E5
         """
-        pass
+        innovs = {g.innov_num for g in self.link_genes)
+        max_innov = max(innovs)
+        return [g.innov_num for g in other.link_genes
+                if g.innov_num > max_innov and g.innov_num not in innovs]
 
     def get_network(self):
         """Returns the network representation of this genome (the phenotype)"""
@@ -328,7 +336,9 @@ class LinkGene:
         self.from_node = from_node
         self.to_node = to_node
         self.weight = weight
+        # Should this be the Innovation or the innov number?
         self.innov = innov
+        self.innvo_num = None
         self.enabled = enabled
 
         self.attrs = (from_node, to_node, weight, innov, enabled)
