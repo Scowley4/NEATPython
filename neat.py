@@ -275,8 +275,23 @@ class Genome:
     def mutate_add_link(self):
         pass
 
-    def change_weight(self):
-        pass
+    def mutate_link_weights(self, perturb_prob=.9, cold_prob=.1):
+        # genetics.cpp:737 - Looks like they either just add a random value
+        # in (-1,1) or they make the weight a value (-1,1). This seems a bit
+        # odd. Also, not sure why they say "GAUSSIAN" since I think they are
+        # using a uniform value. This is complicated somewhat by the power and
+        # powermod, but randposneg()*randfloat() just yields a random number in
+        # (-1,1). These functions are defined in networks.h
+        if perturb_prob + cold_prob > 1:
+            raise ValueError('perturb_prob + cold_prob cannot be greater than 1')
+        for g in self.link_genes:
+            r = random.random()
+            weight_change = random.uniform(-1,1)
+            if r < perturb_prob:
+                g.weight += weight_change
+            elif r < perturb_prob+cold_prob:
+                g.weight = weight_change
+            # Else to nothing
 
     def get_mutation(self):
         new_genome = self.copy()
@@ -295,7 +310,7 @@ class Genome:
     def get_disjoint(self, other):
         # Wasn't sure if this should return the genes, the innov numbers, or
         # the Innovations
-        """Returns the <> that are disjoint from this genome.
+        """Returns the innovation numbers that are disjoint from this genome.
 
         Disjoint genes are genes within the max innovation number of P1 that are
         not included in P1. Shown below as D3.
@@ -309,7 +324,7 @@ class Genome:
                 if g.innov_num < max_innov and g.innov_num not in innovs]
 
     def get_excess(self, other):
-        """Returns the <> that are excess to this genome
+        """Returns the innovation numbers that are excess to this genome
 
         Excess genes are genes outside the max innovation number of P1. Shown
         below as E5.
@@ -345,6 +360,7 @@ class LinkGene:
 
     def copy(self):
         return LinkGene(*self.attrs)
+
 
 # Potentially just a data class
 class NodeGene:
