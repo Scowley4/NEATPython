@@ -369,28 +369,45 @@ class NodeGene:
         self.node_id = node_id
         self.is_sensor = is_sensor
 
+
+# genetics.cpp:3254 - "Remove the innovations of the current generation"
+# genetics.cpp:1424 - Yet they still check if the genes match up without using
+# a global system of innovation... Seems like it would be better to not reset
+# each go. Or at least keep the innovation numbers on the genes globally
+# incrementing. I guess it kinda makes sense.. but why even keep tract of
+# innovations at all? That's not quite right.
+#
+# Okay, if you get two genes with the same innovation numbers, and one or each
+# of them gets mutated. Later, you come back and mate them, choosing one or
+# the other gene.
+# However, a third gene gets a mutation on a later generation producing a link
+# in the exact same spot. When this genome tries to mate with one from above,
+# we copy the first parent's gene? Doesn't make sense.
 # Potentially just a data class
 class Innovation:
     """"""
-    def __init__(self):
-        self.node_in = None
-        self.node_out = None
-        self.innov_num_1 = None
-        self.innov_num_2 = None
-        self.new_weight = None
-        self.newnode_id = None
-        self.old_innov_num = None
-        self.recursive = None
+    def __init__(self,):
+        self.node_in = node_in
+        self.node_out = node_out
+        self.innov_num1 = innov_num1
+        self.innov_num2= innov_num2
+        # Their code remembers the weight that this innovation used, assigning
+        # it to the next time this innovation occurs
+        # genetics.cpp:1234 - This weight is uniform (-10,10)
+        self.new_weight = new_weight
+        self.newnode_id = newnode_id
+        self.old_innov_num = old_innov_num
+        self.recursive = recursive
 
     def __eq__(self, other):
         return (
-                (self.node_in == other.node_in) and
-                (self.node_out == other.node_out) and
-                (self.innov_num_1 == other.innov_num_1) and
-                (self.innov_num_2 == other.innov_num_2) and
-                (self.new_weight == other.new_weight) and
-                (self.newnode_id == other.newnode_id) and
+                (self.node_in       == other.node_in) and
+                (self.node_out      == other.node_out) and
+                (self.innov_num1    == other.innov_num1) and
+                (self.innove_num2   == other.innove_num2) and
+                (self.new_weight    == other.new_weight) and
+                (self.newnode_id    == other.newnode_id) and
                 (self.old_innov_num == other.old_innov_num) and
-                (self.recursive == other.recursive)
+                (self.recursive     == other.recursive)
                )
 
