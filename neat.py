@@ -387,15 +387,52 @@ class Network:
         
         # Network adjacency matrix        
         self.A = adj_matrix
-        self.input_nodes = input_nodes
-        self.output_nodes = output_nodes
-        # Node activations
+        self.inputs = input_nodes
+        self.outputs = output_nodes
+        # Node activation values
         self.node_vals = np.zeros((self.A.shape[0], 1))
-        # Check if node was activated
+        
+        # Bool to check if node was activated in the current time step
         self.active_nodes = np.zeros((self.A.shape[0],1), dtype=bool)
         
-        def activate(inputs):
-            pass
+        def activate(inputs, max_iters = 100):
+            """ Returns the acvtivation values of the output nodes. These are 
+            computed by passing a signal through the network until all output nodes are
+            active. If after max_iter iterations, the output nodes remain off, 
+            an array of nans is returned instead.
+            
+            Additionally, we keep the input nodes active at each time step.
+            """
+            
+            self.active_nodes[self.inputs] = True
+            i=0
+            
+            # While some output nodes are inactive, pass the signal farther 
+            # through the network
+            
+            while not self.active_nodes[self.outputs].all():
+                
+                # Activate inputs
+                self.node_vals[self.inputs] = inputs
+                
+                # Drive the activations one time step farther through the network
+                self.node_vals = self.activation_func(self.A.dot(self.node_vals))
+                
+                # Keep track of new node activations
+                self.active_nodes = (self.A != 0).dot(self.active_nodes) or self.active_nodes
+                
+                # Stop if all output nodes are active
+                if self.active_nodes[output].all():
+                    break
+                    
+                i += 1
+                # Stop if the number of iterations exceeds max_iters
+                if i > max_iters:
+                    return np.array([np.nan]*len(self.outputs))
+                    
+            return self.node_vals[self.outputs]
+            
+            
         
         
 # Potentially just a data class
