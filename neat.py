@@ -1,5 +1,6 @@
 import os
 import sys
+import numpy as np
 
 class NEAT:
     """"""
@@ -53,8 +54,8 @@ class Population:
 
         # I would prefer to start with no connections and mutate the
         # connections in as needed.
-        in_nodes = [NodeGene(self.get_next_node_num(), is_sensor=True)
-        out_nodes = [NodeGene(self.get_next_node_num(), is_sensor=False)
+        in_nodes = [NodeGene(self.get_next_node_num(), is_sensor=True)]
+        out_nodes = [NodeGene(self.get_next_node_num(), is_sensor=False)]
         links = []
 
         # Make the first genome
@@ -86,6 +87,7 @@ class Population:
         for spec in self.species.values():
             # spec.flush?
             pass
+                     
 
         for genome in self.population:
             if genome.species_hint is not None:
@@ -293,6 +295,7 @@ class Genome:
                 g.weight = weight_change
             # Else to nothing
 
+                     
     def get_mutation(self):
         new_genome = self.copy()
 
@@ -318,7 +321,7 @@ class Genome:
         P1 - G1 G2    G4
         P2 - G1 G2 D3 G4 E5
         """
-        innovs = {g.innov_num for g in self.link_genes)
+        innovs = {g.innov_num for g in self.link_genes}
         max_innov = max(innovs)
         return [g.innov_num for g in other.link_genes
                 if g.innov_num < max_innov and g.innov_num not in innovs]
@@ -332,18 +335,69 @@ class Genome:
         P1 - G1 G2    G4
         P2 - G1 G2 D3 G4 E5
         """
-        innovs = {g.innov_num for g in self.link_genes)
+        innovs = {g.innov_num for g in self.link_genes}
         max_innov = max(innovs)
         return [g.innov_num for g in other.link_genes
                 if g.innov_num > max_innov and g.innov_num not in innovs]
 
     def get_network(self):
         """Returns the network representation of this genome (the phenotype)"""
-        # TODO DJ
-        # Figure out how activations propogate
-        pass
+
+        # Find which nodes are input and which are output. We may want to store
+        # this info somewhere else (like in the genome)
+        
+        input = []
+        output = []
+        node_num = dict() #Map from node_id to zero index node number
+        curr_node = 0
+        
+        
+        for node in self.node_genes:
+            # Create mapping
+            node_num[node.node_id] = curr_node
+            
+            # Store input and output node_numbers
+            if node.is_input:
+                input.append(curr_node)
+            elif node.is_output:
+                output.append(curr_node)
+                
+            curr_node += 1
+            
+        
+        # Create edge list.
+        for gene in self.link_genes:
+            edges.append((node_num[gene.to_node],node_num[gene.from_node],gene.weight))
+            
+            
+        # Build an adjacency matrix for the network 
+        n = len(node_num)
+        adj_matrix = np.zeros((n,n))
+        for e in edges:
+            adj_matrix[e[:2]] = e[2]
+            
+        return Network(adj_marix,input,output)
+            
 
 
+                     
+class Network:
+    """"""
+    def __init__(self, adj_matrix, input_nodes, output_nodes):
+        
+        # Network adjacency matrix        
+        self.A = adj_matrix
+        self.input_nodes = input_nodes
+        self.output_nodes = output_nodes
+        # Node activations
+        self.node_vals = np.zeros((self.A.shape[0], 1))
+        # Check if node was activated
+        self.active_nodes = np.zeros((self.A.shape[0],1), dtype=bool)
+        
+        def activate(inputs):
+            pass
+        
+        
 # Potentially just a data class
 class LinkGene:
     """"""
@@ -365,9 +419,11 @@ class LinkGene:
 # Potentially just a data class
 class NodeGene:
     """"""
-    def __init__(self, node_id, is_sensor=False):
+    def __init__(self, node_id, is_sensor=False, is_input=False):
         self.node_id = node_id
-        self.is_sensor = is_sensor
+        self.is_output = is_output
+        self.is_input = is_input
+        
 
 
 # genetics.cpp:3254 - "Remove the innovations of the current generation"
