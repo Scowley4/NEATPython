@@ -346,8 +346,8 @@ class Genome:
         # Find which nodes are input and which are output. We may want to store
         # this info somewhere else (like in the genome)
         
-        input = []
-        output = []
+        inputs = []
+        outputs = []
         node_num = dict() #Map from node_id to zero index node number
         curr_node = 0
         
@@ -358,9 +358,9 @@ class Genome:
             
             # Store input and output node_numbers
             if node.is_input:
-                input.append(curr_node)
+                inputs.append(curr_node)
             elif node.is_output:
-                output.append(curr_node)
+                outputs.append(curr_node)
                 
             curr_node += 1
             
@@ -376,7 +376,7 @@ class Genome:
         for e in edges:
             adj_matrix[e[:2]] = e[2]
             
-        return Network(adj_marix,input,output)
+        return Network(adj_marix,inputs,outputs)
             
 
 
@@ -401,15 +401,15 @@ class Network:
             active. If after max_iter iterations, the output nodes remain off, 
             an array of nans is returned instead.
             
-            Additionally, we keep the input nodes active at each time step.
+            Additionally, we reactivate the input nodes at each time step.
             """
-            
+            # Label inputs as active
             self.active_nodes[self.inputs] = True
-            i=0
             
             # While some output nodes are inactive, pass the signal farther 
             # through the network
             
+            i=0
             while not self.active_nodes[self.outputs].all():
                 
                 # Activate inputs
