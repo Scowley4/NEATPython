@@ -87,7 +87,7 @@ class Population:
         for spec in self.species.values():
             # spec.flush?
             pass
-                     
+
 
         for genome in self.population:
             if genome.species_hint is not None:
@@ -295,7 +295,7 @@ class Genome:
                 g.weight = weight_change
             # Else to nothing
 
-                     
+
     def get_mutation(self):
         new_genome = self.copy()
 
@@ -345,96 +345,96 @@ class Genome:
 
         # Find which nodes are input and which are output. We may want to store
         # this info somewhere else (like in the genome)
-        
+
         inputs = []
         outputs = []
         node_num = dict() #Map from node_id to zero index node number
         curr_node = 0
-        
-        
+
+
         for node in self.node_genes:
             # Create mapping
             node_num[node.node_id] = curr_node
-            
+
             # Store input and output node_numbers
             if node.is_input:
                 inputs.append(curr_node)
             elif node.is_output:
                 outputs.append(curr_node)
-                
+
             curr_node += 1
-            
-        
+
+
         # Create edge list.
         for gene in self.link_genes:
-            edges.append((node_num[gene.to_node],node_num[gene.from_node],gene.weight))
-            
-            
-        # Build an adjacency matrix for the network 
+            edges.append((node_num[gene.to_node], node_num[gene.from_node], gene.weight))
+
+
+        # Build an adjacency matrix for the network
         n = len(node_num)
-        adj_matrix = np.zeros((n,n))
+        adj_matrix = np.zeros((n, n))
         for e in edges:
             adj_matrix[e[:2]] = e[2]
-            
-        return Network(adj_marix,inputs,outputs)
-            
+
+        return Network(adj_marix, inputs, outputs)
 
 
-                     
+
+
 class Network:
     """"""
     def __init__(self, adj_matrix, input_nodes, output_nodes):
-        
-        # Network adjacency matrix        
+
+        # Network adjacency matrix
         self.A = adj_matrix
         self.inputs = input_nodes
         self.outputs = output_nodes
         # Node activation values
         self.node_vals = np.zeros((self.A.shape[0], 1))
-        
+
         # Bool to check if node was activated in the current time step
-        self.active_nodes = np.zeros((self.A.shape[0],1), dtype=bool)
-        
-        def activate(inputs, max_iters = 100):
-            """ Returns the acvtivation values of the output nodes. These are 
+        self.active_nodes = np.zeros((self.A.shape[0], 1), dtype=bool)
+
+        def activate(inputs, max_iters=100):
+            """ Returns the acvtivation values of the output nodes. These are
             computed by passing a signal through the network until all output nodes are
-            active. If after max_iter iterations, the output nodes remain off, 
+            active. If after max_iter iterations, the output nodes remain off,
             an array of nans is returned instead.
-            
+
             Additionally, we reactivate the input nodes at each time step.
             """
             # Label inputs as active
             self.active_nodes[self.inputs] = True
-            
-            # While some output nodes are inactive, pass the signal farther 
+
+            # While some output nodes are inactive, pass the signal farther
             # through the network
-            
+
             i=0
             while not self.active_nodes[self.outputs].all():
-                
+
                 # Activate inputs
                 self.node_vals[self.inputs] = inputs
-                
+
                 # Drive the activations one time step farther through the network
                 self.node_vals = self.activation_func(self.A.dot(self.node_vals))
-                
+
                 # Keep track of new node activations
                 self.active_nodes = (self.A != 0).dot(self.active_nodes) or self.active_nodes
-                
+
                 # Stop if all output nodes are active
                 if self.active_nodes[output].all():
                     break
-                    
+
                 i += 1
                 # Stop if the number of iterations exceeds max_iters
                 if i > max_iters:
                     return np.array([np.nan]*len(self.outputs))
-                    
+
             return self.node_vals[self.outputs]
-            
-            
-        
-        
+
+
+
+
 # Potentially just a data class
 class LinkGene:
     """"""
@@ -460,7 +460,7 @@ class NodeGene:
         self.node_id = node_id
         self.is_output = is_output
         self.is_input = is_input
-        
+
 
 
 # genetics.cpp:3254 - "Remove the innovations of the current generation"
