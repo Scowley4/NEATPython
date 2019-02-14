@@ -2,6 +2,11 @@ import os
 import sys
 import numpy as np
 
+INPUT = 'input'
+OUTPUT = 'output'
+HIDDEN = 'hidden'
+BIAS = 'bias'
+
 class NEAT:
     """"""
     def __init__(self):
@@ -54,12 +59,15 @@ class Population:
 
         # I would prefer to start with no connections and mutate the
         # connections in as needed.
-        in_nodes = [NodeGene(self.get_next_node_num(), is_sensor=True)]
-        out_nodes = [NodeGene(self.get_next_node_num(), is_sensor=False)]
+        in_nodes = [NodeGene(self.get_next_node_num(), node_type=INPUT)
+                    for i in inputs]
+        bias_nodes = [NodeGene(self.get_next_node_num(), node_type=BIAS)]
+        out_nodes = [NodeGene(self.get_next_node_num(), node_type=OUTPUT)
+                     for i in outputs]
         links = []
 
         # Make the first genome
-        genesis_genome = Genome(nodes=in_nodes+out_nodes, links=links)
+        genesis_genome = Genome(nodes=in_nodes+bias_nodes+out_nodes, links=links)
 
         # Make the population just this genome
         self.population = [genesis_genome]
@@ -71,6 +79,14 @@ class Population:
 
         self.species[spec_num] = spec
 
+
+    def next_epoch():
+        # Calculate adjusted fitness for species
+
+        # Mark for death
+
+        # Calculate expected offspring for each organism
+        pass
 
 
     def speciate(self):
@@ -257,9 +273,6 @@ class Genome:
         # Two new links
         gene1 = None
 
-    def mutate_link_weight(self):
-        pass
-
     def mutate_toggle_enable(self):
         # See gnetics.cpp:779 - must check to make sure the in-node has other
         # enabled out-node links
@@ -278,12 +291,24 @@ class Genome:
         pass
 
     def mutate_link_weights(self, perturb_prob=.9, cold_prob=.1):
+        """Attempts a mutation on all links in the genome.
+
+        Mutation rate is determined by the sum of perturb_prob and cold_prob.
+        """
         # genetics.cpp:737 - Looks like they either just add a random value
         # in (-1,1) or they make the weight a value (-1,1). This seems a bit
         # odd. Also, not sure why they say "GAUSSIAN" since I think they are
         # using a uniform value. This is complicated somewhat by the power and
         # powermod, but randposneg()*randfloat() just yields a random number in
         # (-1,1). These functions are defined in networks.h
+
+        # Their code for this section contains much more than was described in
+        # the paper. For now, I'm implementing it as it sounds from the paper
+        # "There was an 80% chance of a genome having its connection weights
+        # mutated, in which case each weight had a 90% chance of being
+        # uniformly perturbed and a 10% chance of being assigned a new random
+        # value.
+
         if perturb_prob + cold_prob > 1:
             raise ValueError('perturb_prob + cold_prob cannot be greater than 1')
         for g in self.link_genes:
@@ -293,7 +318,7 @@ class Genome:
                 g.weight += weight_change
             elif r < perturb_prob+cold_prob:
                 g.weight = weight_change
-            # Else to nothing
+            # Else do nothing to that weight
 
 
     def get_mutation(self):
@@ -349,21 +374,16 @@ class Genome:
         inputs = []
         outputs = []
         node_num = dict() #Map from node_id to zero index node number
-        curr_node = 0
 
-
-        for node in self.node_genes:
+        for i, node in enumerate(self.node_genes):
             # Create mapping
-            node_num[node.node_id] = curr_node
+            node_num[node.node_id] = i
 
             # Store input and output node_numbers
             if node.is_input:
-                inputs.append(curr_node)
+                inputs.append(i)
             elif node.is_output:
-                outputs.append(curr_node)
-
-            curr_node += 1
-
+                outputs.append(i)
 
         # Create edge list.
         for gene in self.link_genes:
@@ -395,6 +415,7 @@ class Network:
         # Bool to check if node was activated in the current time step
         self.active_nodes = np.zeros((self.A.shape[0], 1), dtype=bool)
 
+        # We probably need to add something to be a BIAS node to this function
         def activate(inputs, max_iters=100):
             """ Returns the acvtivation values of the output nodes. These are
             computed by passing a signal through the network until all output nodes are
@@ -454,10 +475,19 @@ class LinkGene:
 
 
 # Potentially just a data class
+# NODE TYPES: INPUT, OUTPUT, BIAS, HIDDEN
+# - INPUT : no other inputs to these nodes
+# - BIAS  : no other inputs to this node
+# - OUTPUT: can have both inputs and outputs
+# - HIDDEN: can have both inputs and outputs
+# Which basically breaks them into 2 catagories. Although, the Network needs to
+# know about all 4 catagories since it needs to put inputs in the right place,
+# have a constant BIAS, and collect outputs.
 class NodeGene:
     """"""
-    def __init__(self, node_id, is_sensor=False, is_input=False):
+    def __init__(self, node_id, node_type=HIDDEN, is_sensor=False, is_input=False):
         self.node_id = node_id
+        self.node_type = node_type
         self.is_output = is_output
         self.is_input = is_input
 
