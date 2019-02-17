@@ -373,6 +373,7 @@ class Genome:
 
         inputs = []
         outputs = []
+        bias
         node_num = dict() #Map from node_id to zero index node number
 
         for i, node in enumerate(self.node_genes):
@@ -380,10 +381,12 @@ class Genome:
             node_num[node.node_id] = i
 
             # Store input and output node_numbers
-            if node.is_input:
+            if node.node_type is INPUT:
                 inputs.append(i)
-            elif node.is_output:
+            elif node.node_type is OUTPUT:
                 outputs.append(i)
+            elif node.node_type is BIAS:
+                bias.append(i)
 
         # Create edge list.
         for gene in self.link_genes:
@@ -396,62 +399,72 @@ class Genome:
         for e in edges:
             adj_matrix[e[:2]] = e[2]
 
-        return Network(adj_marix, inputs, outputs)
+        return Network(adj_marix, inputs, outputs, bias)
 
 
 
 
 class Network:
     """"""
-    def __init__(self, adj_matrix, input_nodes, output_nodes):
+    def __init__(self, adj_matrix, input_nodes, output_nodes, bias_nodes):
 
         # Network adjacency matrix
         self.A = adj_matrix
         self.inputs = input_nodes
         self.outputs = output_nodes
+        self.bias = bias_nodes
+        
         # Node activation values
-        self.node_vals = np.zeros((self.A.shape[0], 1))
+        self.node_vals = np.zeros(self.A.shape[0])
 
         # Bool to check if node was activated in the current time step
-        self.active_nodes = np.zeros((self.A.shape[0], 1), dtype=bool)
+        self.active_nodes = np.zeros((self.A.shape[0]), dtype=bool)
+        
+        # Activation function
+        self.sigmoid = lambda x : 1./(1+np.exp(-4.924273*x))
 
-        # We probably need to add something to be a BIAS node to this function
-        def activate(inputs, max_iters=100):
-            """ Returns the acvtivation values of the output nodes. These are
-            computed by passing a signal through the network until all output nodes are
-            active. If after max_iter iterations, the output nodes remain off,
-            an array of nans is returned instead.
+    def activate(self,inputs, max_iters=100):
+        """ Returns the acvtivation values of the output nodes. These are
+        computed by passing a signal through the network until all output nodes are
+        active. If after max_iter iterations, the output nodes remain off,
+        an array of nans is returned instead.
 
-            Additionally, we reactivate the input nodes at each time step.
-            """
-            # Label inputs as active
-            self.active_nodes[self.inputs] = True
+        Additionally, we reactivate the input nodes at each time step.
+        """
+        # Label inputs and bias as active
+        self.active_nodes[self.inputs] = True
+        self.active_nodes[self.bias] = True
 
-            # While some output nodes are inactive, pass the signal farther
-            # through the network
+        # While some output nodes are inactive, pass the signal farther
+        # through the network
 
-            i=0
-            while not self.active_nodes[self.outputs].all():
+        i=0
+        while not self.active_nodes[self.outputs].all():
 
-                # Activate inputs
-                self.node_vals[self.inputs] = inputs
+            # Activate inputs
+            # NOTE: This step disallows recurrent connections between hidden and input nodes
+            
+            self.node_vals[self.inputs] = inputs
+            self.node_vals[self.bias] = 1.
+            # Drive the activations one time step farther through the network
+            self.node_vals = self.A.dot(self.node_vals)
 
-                # Drive the activations one time step farther through the network
-                self.node_vals = self.activation_func(self.A.dot(self.node_vals))
+            # Keep track of new node activations
+            self.active_nodes = (self.A != 0).dot(self.active_nodes) + self.active_nodes
+            print(self.active_nodes)
+            
+            # Apply sigmoid to active nodes
+            self.node_vals[self.active_nodes] = self.sigmoid(self.node_vals[self.active_nodes])
+            
+            print(self.node_vals)
 
-                # Keep track of new node activations
-                self.active_nodes = (self.A != 0).dot(self.active_nodes) or self.active_nodes
 
-                # Stop if all output nodes are active
-                if self.active_nodes[output].all():
-                    break
+            i += 1
+            # Stop if the number of iterations exceeds max_iters
+            if i > max_iters:
+                return np.array([np.nan]*len(self.outputs))
 
-                i += 1
-                # Stop if the number of iterations exceeds max_iters
-                if i > max_iters:
-                    return np.array([np.nan]*len(self.outputs))
-
-            return self.node_vals[self.outputs]
+        return self.node_vals[self.outputs]
 
 
 
@@ -488,8 +501,6 @@ class NodeGene:
     def __init__(self, node_id, node_type=HIDDEN, is_sensor=False, is_input=False):
         self.node_id = node_id
         self.node_type = node_type
-        self.is_output = is_output
-        self.is_input = is_input
 
 
 
