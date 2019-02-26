@@ -22,14 +22,29 @@ class Population:
         self.c1 = c1 # Excess gene coefficient
         self.c2 = c2 # Disjoin gene coefficient
         self.c3 = c3 # Weight different coefficient
+        self.survival_thresh = 0.3
         self.species_dropoff_age = 15 #Not sure about this
+        self.mutate_only_prob = 0.25 # From the paper
+        self.interspecies_mate_rate = 0.001
+        self.mate_only_prob = 0.2 # Don't think this is found in the paper, but
+                                  # it's in their code...
 
+        mutate_add_node_prob = 0.03
+        mutate_add_link_prob = 0.05
+        mutate_link_weights_prob = 0.8
+        mutate_toggle_enable_prob = 0.0
+        mutate_toggle_reenable_prob = 0.0
+
+
+        pop_champ = None
+        pop_champs = []
 
         self.species = dict()
-        self.population = []
+        self.all_genomes = []
         self.gen_num = 0
         self.species_num = -1
         self.innov_num = -1
+        self.node_map = dict()
         self.node_num = -1
 
     def get_next_species_num(self):
@@ -50,6 +65,25 @@ class Population:
                 genome.fitness = fitness_func(genome)
                 genome.adj_fitness = genome.fitness/len(spec)
 
+    # def get_average_fitness(self):
+    #     total_fit = 0
+    #     n = 0
+    #     for spec in self.species:
+    #         for genome in spec.genomes:
+    #             total_fit += genome.fitness
+    #             n += 1
+    #     return total_fit/n
+
+    def get_total_fitness(self):
+        return sum(g.fitness for g in self.all_genomes)
+
+    def get_total_adj_fitness(self):
+        return sum(g.adj_fitness for g in self.all_genomes)
+
+
+    def get_average_fitness(self):
+        return self.get_total_fitness()/len(all_genomes)
+
     def spawn_initial_population(self, inputs, outputs):
         """Population of all the same topology with weights slightly
         perturbed"""
@@ -64,30 +98,84 @@ class Population:
         bias_nodes = [NodeGene(self.get_next_node_num(), node_type=BIAS)]
         out_nodes = [NodeGene(self.get_next_node_num(), node_type=OUTPUT)
                      for i in outputs]
+        nodes = in_nodes + bias_nodes + out_nodes
+
+        self.node_map = {n.node_id: n for n in nodes}
+
         links = []
 
         # Make the first genome
-        genesis_genome = Genome(nodes=in_nodes+bias_nodes+out_nodes, links=links)
+        genesis_genome = Genome(self, nodes=nodes, links=links)
 
         # Make the population just this genome
-        self.population = [genesis_genome]
+        self.all_genomes = [genesis_genome]
 
         # Make the first spec
         spec_num = self.get_next_species_num()
-        spec = Species(spec_num, self.gen_num)
+        spec = Species(self, spec_num)
         spec.add_genome(genesis_genome)
 
         self.species[spec_num] = spec
 
+    def get_champion(self):
+        return max(self.all_genomes)
+
+    def update_pop_champ(self):
+        self.pop_champ = self.get_champion()
+        self.pop_champs.append(pop_champ)
+
+        if self.pop_champs[-1] > self.pop_champs[-2]:
+            old = self.pop_champs[-2].fitness
+            new = self.pop_champs[-1].fitness
+            print(f'**Gen: {self.cur_gen}\n  PopChamp: {old} -> {new}')
+
 
     def next_epoch():
+
+        self.update_pop_champ()
+
+        new_genomes = []
         # Calculate adjusted fitness for species
+        for spec in self.species:
+            spec.adjust_fitness()
 
-        # Mark for death
+        tot_adj_fit = self.get_total_adj_fitness()
 
-        # Calculate expected offspring for each organism
-        pass
+        print('Reproducing')
+        for spec in self.species:
+            percent_offspring = sum(g.adj_fitness/tot_adj_fit for g in spec.genomes)
+            # Cull before reproducing
+            spec.cull()
 
+            n_offspring = round(self.pop_size * percent_offspring)
+            new_genomes.append(spec.reproduce(n_offspring))
+
+        self.all_genomes = new_genomes
+        print('Speciating')
+        self.speciate()
+
+    def get_random_champ(weighted=False, spec=None):
+
+        species = [s for s in self.species if s is not spec]
+
+        # If there is only one species
+        if len(species) == 0:
+            return spec.get_random_genome()
+
+        # This is not how it's done in their code. Their function (gaussrand)
+        # is weird. So I just decided to weight probabilities evenly based on
+        # species size
+
+        # genetics.cpp:3579 - interspecies mating tends toward better species.
+        # This is juged based on the species size (since this indirectly
+        # represents the fitness of the species).
+        # dad (parent 2) is the species champ of other species
+        if weighted:
+            probs = np.array([len(s) for s in species])
+            probs = probs / probs.sum()
+            return np.random.choice(species, p=probs).get_champion()
+        else:
+            return np.random.choice(species).get_champion()
 
     def speciate(self):
         """Separates organisms into species.
@@ -101,11 +189,9 @@ class Population:
 
         # Clear out the previous generation
         for spec in self.species.values():
-            # spec.flush?
-            pass
+            spec.flush()
 
-
-        for genome in self.population:
+        for genome in self.all_genomes:
             if genome.species_hint is not None:
                 # check compatibility with that species champion
                 pass
@@ -115,7 +201,7 @@ class Population:
                     pass
                 else: # make a new spec
                     spec_num = self.get_next_species_num()
-                    spec = Species(spec_num, self.gen_num)
+                    spec = Species(self, spec_num)
                     spec.add_genome(genome)
                     self.species[spec_num] = spec
 
@@ -128,7 +214,7 @@ class Population:
     def remove_unimproved_species(self):
         """Removes all species that haven't improved for some time"""
         for spec_num, spec in list(self.species.items()):
-            if self.gen_num - spec.last_improved_gen > 15:
+            if self.gen_num - spec.gen_last_improved > self.species_dropoff_age:
                 self.species.pop(spec_num)
 
     def reproduce(self):
@@ -139,15 +225,27 @@ class Population:
 
 class Species:
     """"""
-    def __init__(self, species_num, start_gen):
+    def __init__(self, population, species_num):
+        self.pop = population
         self.species_num = species_num
-        self.start_gen = start_gen
-        self.average_fitness = None
-        self.last_improved_gen = 0
+        self.gen_start= population.gen_num
+
         self.genomes = []
+
+        self.average_fitness = None
+
+        self.max_fitness_ever = -float('inf')
+        self.gen_last_improved= population.gen_num
+
+        self.champ = None
 
     def __len__(self):
         return len(self.genomes)
+
+    def flush(self):
+        """Removes all the genomes from the species."""
+        self.genomes = []
+
 
     def add_genome(self, genome):
         """Adds a genome to the species."""
@@ -162,7 +260,13 @@ class Species:
         self.genomes.sort(reverse=reverse)
 
     def get_average_fitness(self):
-        return sum(g.fitness for g in self.genomes)/len(self.genomes)
+        return sum(g.fitness for g in self.genomes)/len(self)
+
+    def get_total_fitness(self):
+        return sum(g.fitness for g in self.genomes)
+
+    def get_total_adj_fitness(self):
+        return sum(g.adj_fitness for g in self.genomes)
 
     def get_champion(self):
         """Returns the best genome in the species."""
@@ -172,21 +276,62 @@ class Species:
         """Chooses a uniform random genome from the species."""
         return random.choice(self.genomes)
 
-    def get_next_generation(self, num_offspring):
-        pass
-
-    def reproduce(self):
+    def reproduce(self, n_offspring=0):
         # interspecies offspring?
         # mutation
         # crossover
 
+        # NOTE It looks like they have a mate_only_prob. I haven't been able to
+        # find this in the paper, but it's in genetics.cpp:3626 and it's set to
+        # .2 in the settings.
+
+        new_genomes = []
+
+        # Remove all the unfit parents
+        self.cull()
+
         # genetics.cpp:3419 - If species gets more than 5 offspring,
         # clone the species champ
+        if n_offspring > 5:
+            genome = self.get_champion()
+            genome.species_hint = self.species_num
+            new_genomes.append(genome)
+            n_offspring -= 1
 
-        # genetics.cpp:3579 - interspecies mating tends toward better species.
-        # This is juged based on the species size (since this indirectly
-        # represents the fitness of the species).
-        # dad (parent 2) is the species champ of other species
+
+        for i in range(n_offspring):
+            # get a new genome
+            p1 = self.get_random_genome()
+            crossed_over = False
+
+            # If we will only mutate without crossover
+            if ((random.random() < self.pop.mutate_only_prob) or
+               (len(self) < 2)):
+               genome = p1.copy()
+            else:
+                # Decide between inter/intra species
+                if random.random() < self.pop.interspecies_mate_rate:
+                    p2 = self.pop.get_random_champ(weighted=True,
+                                                          spec=self)
+                else:
+                    p2 = self.get_random_genome()
+
+                genome = p1.get_crossover(p2)
+                crossed_over = True
+
+            # Decide if the new genome will mutate
+            if (not crossed over or
+                (random.random() < self.pop.mate_only_prob)):
+                genome.mutate()
+
+            genome.species_hint = self.species_num
+            new_genomes.append(genome)
+
+        return new_genomes
+
+
+
+
 
         # genetics.cpp:1354 - Between two parents, first order in higher
         # fitness, second ordering is lower gene count.
@@ -194,32 +339,53 @@ class Species:
         # use the second parents excess/disjoin (as if it was better). Very
         # arbitrary.
 
+    # Offspring are computed for each genome using adjusted fitness and then
+    # shared with the species.
 
-        pass
+    def cull(self):
+        """Remove the genomes that are not fit to be parents."""
+        # genetics.cpp:2716
+        num_parents = int(self.pop.survival_thresh * len(self) + 1)
+        self.sort_genomes()
+        self.genomes = self.genomes[:num_parents]
 
     def adjust_fitness(self):
+        """Adjust the fitness of inidividuals based on age and time since
+        improvement.
+        """
         # see genetics.cpp:2668 "Can change the fitness of the organisms in the
         # species to be higher for very new species (to protect them)"
         # NOTE I don't believe this is found in the paper
-        pass
+        # Looks like they used a 1 for this param anyway, so it didn't do
+        # anything
+
+        cur_max = self.get_champion().fitness
+        if cur_max > self.max_fitness_ever:
+            self.max_fitness_ever = cur_max
+            self.gen_last_improved = self.pop.gen_num
+
+        for g in self.genomes:
+            g.adj_fitness = g.fitness/len(self)
+
+        # genetics.cpp:2699 Kill species that haven't progressed for a long
+        # time by dividing fitness of all individuals in spec by 100. Weird way
+        # to do it.
+        if (self.pop.gen_num - self.gen_last_improved) >
+            self.pop.species_dropoff_age)):
+            for g in self.genomes:
+                g.adj_fitness *= .01
+
 
 class Genome:
     """"""
-    # I think the parameters actually belong to the genome to rank it's
-    # compatibility with other genomes. Since we don't really want to have to
-    # give each genome the parameters (waste of memory and it's verbose), maybe
-    # make them class parameters and have the containing class own the class or
-    # modify the parameters on this class? Not quite sure.
-    c1 = 1
-    c2 = 1
-    c3 = 1
-
-    def __init__(self, nodes, links):
-        self.node_genes = []
-        self.link_genes = []
+    def __init__(self, population, nodes=[], links=[]):
+        self.pop = population
+        self.node_genes = nodes
+        self.link_genes = links
         self.fitness = None
         self.adj_fitness = None
         self.species_hint = None # id of the genome's parent species
+        self.super_champ = False # marker for population champion
 
 
     def __lt__(self, other):
@@ -233,8 +399,9 @@ class Genome:
 
     def copy(self):
         """Performs a deep copy of the genome."""
-        new_genome = Genome()
-        new_genome.node_genes = [gene.copy() for gene in self.node_genes]
+        new_genome = Genome(self.pop)
+        #new_genome.node_genes = [gene.copy() for gene in self.node_genes]
+        new_genome.node_genes = self.node_genes
         new_genome.link_genes = [gene.copy() for gene in self.link_genes]
         new_genome.fitness = self.fitness
         new_genome.adj_fitness = self.adj_fitness
@@ -253,11 +420,40 @@ class Genome:
         N = min(gene_count1, gene_count2)
         N = N if max(gene_count1, gene_count2)>20 else 1
 
-        pass
+        excess = self.get_excess_genes(other)
+        disjoint = self.get_disjoint_genes(other)
+        m1 = self.get_matching_genes(other)
+        m2 = other.get_matching_genes(self)
+
+        # Check to make sure the ordering is right...
+        for g1, g2 in zip(m1, m2):
+            assert g1.innov_num == g2.innov_num
+
+        # Average weight difference
+        W = sum(abs(g1.weight - g2.weight) for g1, g2 in zip(m1, m2))/len(m1)
+
+        c1, c2, c3 = self.pop.c1, self.pop.c2, self.pop.c3,
+        return (c1*len(excess) + c2*len(disjoint))/N + c3*W
+
+    def mutate(self):
+        if random.random() < self.pop.mutate_add_node_prob:
+            pass
+
+        elif random.random() < self.mutate_add_link_prob:
+            pass
+
+        else:
+            if random.random() < population.mutate_link_weights_prob:
+                pass
+            if random.random() < population.mutate_toggle_enable_prob:
+                pass
+            if random.random() < population.mutate_toggle_reenable_prob:
+                pass
 
 
 
     def mutate_add_node(self):
+        # FIXME
         # genetics.cpp:819 Genome::mutate_add_node
         link_gene = random.choice(self.link_genes)
 
@@ -267,7 +463,10 @@ class Genome:
         # New node gene
         node_id = len(node_genes) + 1
         innov_num = get_node_innov_num(node_id)
-        new_node = NodeGene(node_id,innov_num)
+        new_node = NodeGene(node_id, innov_num)
+
+        self.pop.node_map[node_id] = new_node
+
         self.node_genes.append(new_node)
 
         # Two new links
@@ -276,7 +475,10 @@ class Genome:
     def mutate_toggle_enable(self):
         # See gnetics.cpp:779 - must check to make sure the in-node has other
         # enabled out-node links
-        pass
+        # NOTE Going to try it without accounting for the above...
+        gene = random.choice(self.link_genes)
+        gene.enabled = not gene.enabled
+
 
     def mutate_gene_reenable(self):
         # Not sure why the naming is different from the above
@@ -285,7 +487,10 @@ class Genome:
         # it. Not sure if the genes are sorted in any meaningful way other than
         # when they were added? "First" in this case means the first in the
         # list of genes, NOT the gene that was first disabled.
-        pass
+        for link in self.link_genes:
+            if not link.enabled:
+                link.enabled = True
+                return
 
     def mutate_add_link(self):
         pass
@@ -324,8 +529,6 @@ class Genome:
     def get_mutation(self):
         new_genome = self.copy()
 
-        new_genome.add_node()
-
     def get_crossover(self, other):
         # Choose randomly when genes match up
         # Only inherit disjoin and excess genes from more fit parent
@@ -335,34 +538,100 @@ class Genome:
         # Disabled in either parent means 75% chance of disabled in child
         pass
 
-    def get_disjoint(self, other):
-        # Wasn't sure if this should return the genes, the innov numbers, or
-        # the Innovations
-        """Returns the innovation numbers that are disjoint from this genome.
+    def get_multipoint_crossover(self, other):
+        # Make p1 the better parent
+        p1, p2 = sorted([self, other], reverse=True)
+
+        p1_matching = p1.get_matching_genes(p2)
+        p2_matching = p2.get_matching_genes(p1)
+        disjoint = p1.get_disjoint_genes(p2)
+        excess = p1.get_excess_genes(p2)
+
+        # Select randomly from p1 and p2
+        mask = np.random.randint(2, size=len(p1_matching))
+        genes = [p1_matching[i] if mask[i] else p2_matching[i]
+                 for i in range(len(mask))]
+
+        for i, g in enumerate(genes):
+            if (not p1_matching[i].enabled) or (not p2_matching[i].enabled):
+                if random.random() < .75: #FIXME
+                    g.enabled = False
+                else:
+                    g.enabled = True
+
+        genes += disjoint + excess
+
+        child_genes = []
+        child_links = set()
+        for g in genes:
+            in_out = (g.in_node.node_id, g.out_node.node_id)
+            if in_out not in child_links:
+                child_genes.append(g.copy())
+                child_links.add(in_out)
+
+        #FIXME Probably not the cleanest way to do this
+        node_set = set()
+        nodes = []
+        for l in child_links:
+            if l.in_node.node_id not in node_set:
+                node_set.add(l.in_node.node_id)
+                nodes.append(l.in_node)
+            if l.out_node.node_id not in node_set:
+                node_set.add(l.out_node.node_id)
+                nodes.append(l.out_node)
+
+        return Genome(self.pop, nodes=nodes, links=[l.copy() for l in child_links])
+
+
+
+    def get_matching_genes(self, other):
+        """Returns the genes that are shared.
+
+        Matching genes are genes that each of P1 and P2 have.
+
+        Note that, like get_disjoint and get_excess, this returns P1's version
+        of these genes.
+
+        P1 - G1 G2 D3    G5    E7
+        P2 - G1 G2    D4 G5 E6
+
+        returns [G1, G2, G4]
+        """
+        innovs = {g.innov_num for g in other.link_genes}
+        max_innov = max(innovs)
+        return [g for g in self.link_genes
+                if g.innov_num in innovs]
+
+    def get_disjoint_genes(self, other):
+        """Returns this genome's genes that are disjoint from the other genome.
 
         Disjoint genes are genes within the max innovation number of P1 that are
         not included in P1. Shown below as D3.
 
-        P1 - G1 G2    G4
-        P2 - G1 G2 D3 G4 E5
+        P1 - G1 G2 D3    G5    E7
+        P2 - G1 G2    D4 G5 E6
+
+        returns [D3]
         """
-        innovs = {g.innov_num for g in self.link_genes}
+        innovs = {g.innov_num for g in other.link_genes}
         max_innov = max(innovs)
-        return [g.innov_num for g in other.link_genes
+        return [g for g in other.link_genes
                 if g.innov_num < max_innov and g.innov_num not in innovs]
 
-    def get_excess(self, other):
-        """Returns the innovation numbers that are excess to this genome
+    def get_excess_genes(self, other):
+        """Returns this genome's genes that are excess from the other genome.
 
         Excess genes are genes outside the max innovation number of P1. Shown
-        below as E5.
+        below as E7.
 
-        P1 - G1 G2    G4
-        P2 - G1 G2 D3 G4 E5
+        P1 - G1 G2 D3    G5    E7
+        P2 - G1 G2    D4 G5 E6
+
+        returns [E7]
         """
-        innovs = {g.innov_num for g in self.link_genes}
+        innovs = {g.innov_num for g in other.link_genes}
         max_innov = max(innovs)
-        return [g.innov_num for g in other.link_genes
+        return [g for g in self.link_genes
                 if g.innov_num > max_innov and g.innov_num not in innovs]
 
     def get_network(self):
@@ -373,7 +642,7 @@ class Genome:
 
         inputs = []
         outputs = []
-        bias
+        bias = []
         node_num = dict() #Map from node_id to zero index node number
 
         for i, node in enumerate(self.node_genes):
@@ -402,83 +671,14 @@ class Genome:
         return Network(adj_marix, inputs, outputs, bias)
 
 
-
-
-class Network:
-    """"""
-    def __init__(self, adj_matrix, input_nodes, output_nodes, bias_nodes):
-
-        # Network adjacency matrix
-        self.A = adj_matrix
-        self.inputs = input_nodes
-        self.outputs = output_nodes
-        self.bias = bias_nodes
-        
-        # Node activation values
-        self.node_vals = np.zeros(self.A.shape[0])
-
-        # Bool to check if node was activated in the current time step
-        self.active_nodes = np.zeros((self.A.shape[0]), dtype=bool)
-        
-        # Activation function
-        self.sigmoid = lambda x : 1./(1+np.exp(-4.924273*x))
-
-    def activate(self,inputs, max_iters=100):
-        """ Returns the acvtivation values of the output nodes. These are
-        computed by passing a signal through the network until all output nodes are
-        active. If after max_iter iterations, the output nodes remain off,
-        an array of nans is returned instead.
-
-        Additionally, we reactivate the input nodes at each time step.
-        """
-        # Label inputs and bias as active
-        self.active_nodes[self.inputs] = True
-        self.active_nodes[self.bias] = True
-
-        # While some output nodes are inactive, pass the signal farther
-        # through the network
-
-        i=0
-        while not self.active_nodes[self.outputs].all():
-
-            # Activate inputs
-            # NOTE: This step disallows recurrent connections between hidden and input nodes
-            
-            self.node_vals[self.inputs] = inputs
-            self.node_vals[self.bias] = 1.
-            # Drive the activations one time step farther through the network
-            self.node_vals = self.A.dot(self.node_vals)
-
-            # Keep track of new node activations
-            self.active_nodes = (self.A != 0).dot(self.active_nodes) + self.active_nodes
-            print(self.active_nodes)
-            
-            # Apply sigmoid to active nodes
-            self.node_vals[self.active_nodes] = self.sigmoid(self.node_vals[self.active_nodes])
-            
-            print(self.node_vals)
-
-
-            i += 1
-            # Stop if the number of iterations exceeds max_iters
-            if i > max_iters:
-                return np.array([np.nan]*len(self.outputs))
-
-        return self.node_vals[self.outputs]
-
-
-
-
 # Potentially just a data class
 class LinkGene:
     """"""
-    def __init__(self, from_node, to_node, weight, innov, enabled=True):
+    def __init__(self, from_node, to_node, weight, innov_num, enabled=True):
         self.from_node = from_node
         self.to_node = to_node
         self.weight = weight
-        # Should this be the Innovation or the innov number?
-        self.innov = innov
-        self.innvo_num = None
+        self.innvo_num = innov_num
         self.enabled = enabled
 
         self.attrs = (from_node, to_node, weight, innov, enabled)
@@ -498,9 +698,13 @@ class LinkGene:
 # have a constant BIAS, and collect outputs.
 class NodeGene:
     """"""
-    def __init__(self, node_id, node_type=HIDDEN, is_sensor=False, is_input=False):
+    def __init__(self, node_id, node_type=HIDDEN):
         self.node_id = node_id
         self.node_type = node_type
+
+    def __eq__(self, other):
+        return ((self.node_id   == other.node_id) and
+                (self.node_type == other.node_type)
 
 
 
@@ -520,7 +724,7 @@ class NodeGene:
 # Potentially just a data class
 class Innovation:
     """"""
-    def __init__(self,):
+    def __init__(self):
         self.node_in = node_in
         self.node_out = node_out
         self.innov_num1 = innov_num1
@@ -544,4 +748,71 @@ class Innovation:
                 (self.old_innov_num == other.old_innov_num) and
                 (self.recursive     == other.recursive)
                )
+
+
+
+class Network:
+    """"""
+    def __init__(self, adj_matrix, input_nodes, output_nodes, bias_nodes):
+
+        # Network adjacency matrix
+        self.A = adj_matrix
+        self.inputs = input_nodes
+        self.outputs = output_nodes
+        self.bias = bias_nodes
+
+        # Node activation values
+        self.node_vals = np.zeros(self.A.shape[0])
+
+        # Bool to check if node was activated in the current time step
+        self.active_nodes = np.zeros((self.A.shape[0]), dtype=bool)
+
+        # Activation function
+        self.sigmoid = lambda x : 1./(1+np.exp(-4.924273*x))
+
+    def activate(self,inputs, max_iters=100):
+        """ Returns the acvtivation values of the output nodes. These are
+        computed by passing a signal through the network until all output nodes are
+        active. If after max_iter iterations, the output nodes remain off,
+        an array of nans is returned instead.
+
+        Additionally, we reactivate the input nodes at each time step.
+        """
+        # Label inputs and bias as active
+        self.active_nodes[self.inputs] = True
+        self.active_nodes[self.bias] = True
+
+        # While some output nodes are inactive, pass the signal farther
+        # through the network
+
+        i=0
+        while not self.active_nodes[self.outputs].all():
+
+            # Activate inputs
+            # NOTE: This step disallows recurrent connections between hidden and input nodes
+
+            self.node_vals[self.inputs] = inputs
+            self.node_vals[self.bias] = 1.
+            # Drive the activations one time step farther through the network
+            self.node_vals = self.A.dot(self.node_vals)
+
+            # Keep track of new node activations
+            self.active_nodes = (self.A != 0).dot(self.active_nodes) + self.active_nodes
+            print(self.active_nodes)
+
+            # Apply sigmoid to active nodes
+            self.node_vals[self.active_nodes] = self.sigmoid(self.node_vals[self.active_nodes])
+
+            print(self.node_vals)
+
+
+            i += 1
+            # Stop if the number of iterations exceeds max_iters
+            if i > max_iters:
+                return np.array([np.nan]*len(self.outputs))
+
+        return self.node_vals[self.outputs]
+
+
+
 
