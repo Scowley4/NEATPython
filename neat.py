@@ -127,7 +127,7 @@ class Population:
         if self.pop_champs[-1] > self.pop_champs[-2]:
             old = self.pop_champs[-2].fitness
             new = self.pop_champs[-1].fitness
-            print(f'**Gen: {self.cur_gen}\n  PopChamp: {old} -> {new}')
+            print('**Gen: {self.cur_gen}\n  PopChamp: {old} -> {new}')
 
 
     def next_epoch():
@@ -320,7 +320,7 @@ class Species:
                 crossed_over = True
 
             # Decide if the new genome will mutate
-            if (not crossed over or
+            if (not crossed_over or
                 (random.random() < self.pop.mate_only_prob)):
                 genome.mutate()
 
@@ -370,8 +370,8 @@ class Species:
         # genetics.cpp:2699 Kill species that haven't progressed for a long
         # time by dividing fitness of all individuals in spec by 100. Weird way
         # to do it.
-        if (self.pop.gen_num - self.gen_last_improved) >
-            self.pop.species_dropoff_age)):
+        if ((self.pop.gen_num - self.gen_last_improved) >
+            self.pop.species_dropoff_age):
             for g in self.genomes:
                 g.adj_fitness *= .01
 
@@ -704,7 +704,7 @@ class NodeGene:
 
     def __eq__(self, other):
         return ((self.node_id   == other.node_id) and
-                (self.node_type == other.node_type)
+                (self.node_type == other.node_type))
 
 
 
@@ -798,12 +798,10 @@ class Network:
 
             # Keep track of new node activations
             self.active_nodes = (self.A != 0).dot(self.active_nodes) + self.active_nodes
-            print(self.active_nodes)
 
             # Apply sigmoid to active nodes
             self.node_vals[self.active_nodes] = self.sigmoid(self.node_vals[self.active_nodes])
 
-            print(self.node_vals)
 
 
             i += 1
