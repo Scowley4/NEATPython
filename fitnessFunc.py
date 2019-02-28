@@ -118,7 +118,7 @@ def fit_pole_balance(network,
     
     while (abs(x) < track_limit) and (abs(theta) < pole_angle_failure):
         #Get the force from the network
-        force = network.activate([])
+        force = network.activate([theta,theta_vel,x,x_vel])
         
         #Compute the system parameters for the next time step
         next_theta = theta + tau*theta_vel
