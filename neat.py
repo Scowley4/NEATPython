@@ -437,18 +437,18 @@ class Genome:
 
     def mutate(self):
         if random.random() < self.pop.mutate_add_node_prob:
-            pass
+            self.mutate_add_node()
 
         elif random.random() < self.mutate_add_link_prob:
-            pass
+            self.mutate_add_link()
 
         else:
             if random.random() < population.mutate_link_weights_prob:
-                pass
+                self.mutate_link_weights()
             if random.random() < population.mutate_toggle_enable_prob:
-                pass
+                self.mutate_toggle_enable()
             if random.random() < population.mutate_toggle_reenable_prob:
-                pass
+                self.mutate_gene_reenable()
 
 
 
@@ -472,6 +472,9 @@ class Genome:
         # Two new links
         gene1 = None
 
+    def mutate_add_link(self):
+        pass
+
     def mutate_toggle_enable(self):
         # See gnetics.cpp:779 - must check to make sure the in-node has other
         # enabled out-node links
@@ -492,8 +495,6 @@ class Genome:
                 link.enabled = True
                 return
 
-    def mutate_add_link(self):
-        pass
 
     def mutate_link_weights(self, perturb_prob=.9, cold_prob=.1):
         """Attempts a mutation on all links in the genome.
@@ -526,8 +527,8 @@ class Genome:
             # Else do nothing to that weight
 
 
-    def get_mutation(self):
-        new_genome = self.copy()
+    # def get_mutation(self):
+    #     new_genome = self.copy()
 
     def get_crossover(self, other):
         # Choose randomly when genes match up
@@ -770,7 +771,7 @@ class Network:
         # Activation function
         self.sigmoid = lambda x : 1./(1+np.exp(-4.924273*x))
 
-    def activate(self,inputs, max_iters=100):
+    def activate(self, inputs, max_iters=100):
         """ Returns the acvtivation values of the output nodes. These are
         computed by passing a signal through the network until all output nodes are
         active. If after max_iter iterations, the output nodes remain off,
