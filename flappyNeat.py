@@ -61,15 +61,15 @@ def main(network=None):
     """
     Main function can accept a Neat Network object and determine how
     well the network can play flappy bird.
-    
+
     Parameters
     ----------
     network (neat network object): a network with 8 inputs and one output
-    
+
     Returns
     -------
     totTime : Total time the network survived
-    
+
     """
     global SCREEN, FPSCLOCK
     pygame.init()
@@ -146,7 +146,7 @@ def main(network=None):
 
         # Play game
         crashInfo = mainGame(network=network)
-        
+
         # Get total time
         totTime = pygame.time.get_ticks()
 
@@ -200,20 +200,20 @@ def mainGame(network=None):
 
     while True:
         for event in pygame.event.get():
-            
+
             # check for player exiting
             if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
                 pygame.quit()
                 sys.exit()
-                
+
             # check for player flapping
             if event.type == KEYDOWN and (event.key == K_SPACE or event.key == K_UP):
                 if playery > -2 * IMAGES['player'][0].get_height():
                     playerVelY = playerFlapAcc
                     playerFlapped = True
                     SOUNDS['wing'].play()
-                
-            
+
+
 
         # check for crash here
         crashTest = checkCrash({'x': playerx, 'y': playery, 'index': playerIndex},
@@ -229,7 +229,7 @@ def mainGame(network=None):
                 'playerVelY': playerVelY,
                 'playerRot': playerRot,
             }
-        
+
         """
         NEURAL NETWORK MAKES A MOVE HERE
 
@@ -286,7 +286,7 @@ def mainGame(network=None):
             # NETWORK DECIDES TO FLAP OR NOT
             print(playery)
             print("Net output: "+str(network.activate([playery,0])))
-            
+
             if network.activate([playery,playerVelY,
                                  uPipe1X,uPipe1Y,
                                  lPipe1X,lPipe1Y,
@@ -297,7 +297,7 @@ def mainGame(network=None):
                     playerVelY = playerFlapAcc
                     playerFlapped = True
                     SOUNDS['wing'].play()
-                    
+
         """ END NEURAL NET CODE"""
 
         # check for score
@@ -361,7 +361,7 @@ def mainGame(network=None):
         visibleRot = playerRotThr
         if playerRot <= playerRotThr:
             visibleRot = playerRot
-        
+
         playerSurface = pygame.transform.rotate(IMAGES['player'][playerIndex], visibleRot)
         SCREEN.blit(playerSurface, (playerx, playery))
 

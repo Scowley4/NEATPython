@@ -1,6 +1,8 @@
 import os
 import sys
 import numpy as np
+from itertools import permutations
+import random
 
 INPUT = 'input'
 OUTPUT = 'output'
@@ -40,6 +42,8 @@ class Population:
 
         self.pop_champ = None
         self.pop_champs = []
+        self.overall_pop_champ = None
+        self.overall_pop_champs = []
 
         self.gen_innovations = []
 
@@ -56,18 +60,18 @@ class Population:
         return self.species_num
 
     def get_next_innov_num(self):
-        self.innov += 1
-        return self.innov
+        self.innov_num += 1
+        return self.innov_num
 
     def get_next_node_num(self):
         self.node_num += 1
         return self.node_num
 
     def compute_pop_fitness(self, fitness_func):
-        for spec in species:
-            for genome in spec:
-                genome.fitness = fitness_func(genome)
-                genome.adj_fitness = genome.fitness/len(spec)
+        for spec in self.species.values():
+            for genome in spec.genomes:
+                network = genome.get_network()
+                genome.fitness = fitness_func(network)
 
     # def get_average_fitness(self):
     #     total_fit = 0
@@ -88,7 +92,7 @@ class Population:
     def get_average_fitness(self):
         return self.get_total_fitness()/len(all_genomes)
 
-    def spawn_initial_population(self, inputs, outputs):
+    def spawn_initial_population(self, n_inputs, n_outputs):
         """Population of all the same topology with weights slightly
         perturbed"""
         # See genetics.cpp:2498
@@ -98,13 +102,14 @@ class Population:
         # I would prefer to start with no connections and mutate the
         # connections in as needed.
         in_nodes = [NodeGene(self.get_next_node_num(), node_type=INPUT)
-                    for i in inputs]
+                    for i in range(n_inputs)]
         bias_nodes = [NodeGene(self.get_next_node_num(), node_type=BIAS)]
         out_nodes = [NodeGene(self.get_next_node_num(), node_type=OUTPUT)
-                     for i in outputs]
+                     for i in range(n_outputs)]
         nodes = in_nodes + bias_nodes + out_nodes
 
         self.node_map = {n.node_id: n for n in nodes}
+        self.base_nodes = [n for n in nodes]
 
         links = []
 
@@ -118,45 +123,81 @@ class Population:
         spec_num = self.get_next_species_num()
         spec = Species(self, spec_num)
         spec.add_genome(genesis_genome)
+        spec.champ = genesis_genome
 
         self.species[spec_num] = spec
 
     def get_champion(self):
         return max(self.all_genomes)
 
+    def update_overall_pop_champ(self):
+        if self.overall_pop_champ is None:
+            self.overall_pop_champ = self.pop_champ
+
+        if self.pop_champ.fitness > self.overall_pop_champ.fitness:
+            self.overall_pop_champs.append(self.pop_champ)
+            self.overall_pop_champ = self.pop_champ
+            if len(self.overall_pop_champs) > 1:
+                old = self.overall_pop_champs[-2].fitness
+                new = self.overall_pop_champs[-1].fitness
+                print(f'**Gen: {self.gen_num}\n  PopChamp: {old} -> {new}')
+
+
     def update_pop_champ(self):
         self.pop_champ = self.get_champion()
-        self.pop_champs.append(pop_champ)
+        self.pop_champs.append(self.pop_champ)
 
-        if self.pop_champs[-1] > self.pop_champs[-2]:
-            old = self.pop_champs[-2].fitness
-            new = self.pop_champs[-1].fitness
-            print('**Gen: {self.cur_gen}\n  PopChamp: {old} -> {new}')
+    def get_most_nodes(self):
+        return max(self.all_genomes, key=lambda g:len(g.node_genes))
+
+    def get_most_links(self):
+        return max(self.all_genomes, key=lambda g:len(g.link_genes))
 
 
-    def next_epoch():
-
+    def next_epoch(self, fitness_func):
+        if self.overall_pop_champ is not None:
+            print('BEST', self.overall_pop_champ.fitness)
+        print('Most Nodes', len(self.get_most_nodes().node_genes))
+        print('Most Links', len(self.get_most_links().link_genes))
+        self.gen_innovations = []
+        self.gen_num += 1
         self.update_pop_champ()
+        self.update_overall_pop_champ()
 
         new_genomes = []
         # Calculate adjusted fitness for species
         for spec in self.species.values():
             spec.adjust_fitness()
+        self.remove_unimproved_species()
 
         tot_adj_fit = self.get_total_adj_fitness()
+        print(tot_adj_fit)
 
         print('Reproducing')
         for spec in self.species.values():
             percent_offspring = sum(g.adj_fitness/tot_adj_fit for g in spec.genomes)
 
-            n_offspring = round(self.pop_size * percent_offspring)
-            new_genomes.append(spec.reproduce(n_offspring))
+            if len(self.species)==1:
+                percent_offspring = 1
+            n_offspring = int(self.pop_size * percent_offspring)
+            new_genomes += spec.reproduce(n_offspring)
 
         self.all_genomes = new_genomes
+        print(f'{len(self.all_genomes)} new genomes')
+
+        before_n_species = len(self.species)
         print('Speciating')
         self.speciate()
+        after_n_species = len(self.species)
+        print(f'{before_n_species}->{after_n_species} species')
 
-    def get_random_champ(weighted=False, spec=None):
+
+        print('Computing fitness')
+        self.compute_pop_fitness(fitness_func)
+        print()
+
+
+    def get_random_champ(self, weighted=False, spec=None):
 
         species = [s for s in self.species.values() if s is not spec]
 
@@ -191,21 +232,27 @@ class Population:
 
         # Clear out the previous generation
         for spec in self.species.values():
+            spec.champ = spec.get_champion()
             spec.flush()
 
         for genome in self.all_genomes:
             if genome.species_hint is not None:
-                # check compatibility with that species champion
-                pass
-            else:
-                for spec in self.species.values():
-                    # check compatibility until found
-                    pass
-                else: # make a new spec
-                    spec_num = self.get_next_species_num()
-                    spec = Species(self, spec_num)
+                spec = self.species[genome.species_hint]
+                if spec.is_compatible(genome):
                     spec.add_genome(genome)
-                    self.species[spec_num] = spec
+                    continue
+
+            for spec in self.species.values():
+                # check compatibility until found
+                if spec.is_compatible(genome):
+                    spec.add_genome(genome)
+                    continue
+            else: # make a new spec
+                spec_num = self.get_next_species_num()
+                spec = Species(self, spec_num)
+                spec.add_genome(genome)
+                spec.champ = genome
+                self.species[spec_num] = spec
 
         # Delete unnecessary species
         for spec_num, spec in list(self.species.items()):
@@ -224,7 +271,7 @@ class Species:
     def __init__(self, population, species_num):
         self.pop = population
         self.species_num = species_num
-        self.gen_start= population.gen_num
+        self.gen_start = population.gen_num
 
         self.genomes = []
 
@@ -244,7 +291,7 @@ class Species:
 
     def add_genome(self, genome):
         """Adds a genome to the species."""
-        self.genomes.add(genome)
+        self.genomes.append(genome)
 
     def sort_genomes(self, reverse=True):
         """Sorts the gnomes inplace.
@@ -270,6 +317,9 @@ class Species:
     def get_random_genome(self):
         """Chooses a uniform random genome from the species."""
         return random.choice(self.genomes)
+
+    def is_compatible(self, genome):
+        return genome.calculate_compatibility(self.champ) < self.pop.d_t
 
     def reproduce(self, n_offspring=0):
         # NOTE It looks like they have a mate_only_prob. I haven't been able to
@@ -363,11 +413,14 @@ class Species:
 class Genome:
     """"""
     def __init__(self, population, nodes=[], links=[]):
+        for l in links:
+            if not isinstance(l, LinkGene):
+                print('I CAUGHT IT')
         self.pop = population
         self.node_genes = nodes
         self.link_genes = links
-        self.fitness = None
-        self.adj_fitness = None
+        self.fitness = -float('inf')
+        self.adj_fitness = -float('inf')
         self.species_hint = None # id of the genome's parent species
         self.super_champ = False # marker for population champion
 
@@ -378,14 +431,30 @@ class Genome:
         return ((self.fitness, -len(self.link_genes)) <
                 (other.fitness, -len(other.link_genes)))
 
+    def is_valid(self):
+        for l in self.link_genes:
+            pass
+        if len(self.node_genes) != len(set(n.node_id for n in self.node_genes)):
+            return False
+        return True
+
+    def get_str(self):
+        return f'nodes {[n.node_id for n in self.node_genes]}\n links {[l.innov_num for l in self.link_genes]}'
+
     def get_fitness(self):
         return self.fitness
+
+    def has_node_num(self, num):
+        for node in self.node_genes:
+            if node.node_id == num:
+                return True
+        return False
 
     def copy(self):
         """Performs a deep copy of the genome."""
         new_genome = Genome(self.pop)
         #new_genome.node_genes = [gene.copy() for gene in self.node_genes]
-        new_genome.node_genes = self.node_genes
+        new_genome.node_genes = [n for n in self.node_genes]
         new_genome.link_genes = [gene.copy() for gene in self.link_genes]
         new_genome.fitness = self.fitness
         new_genome.adj_fitness = self.adj_fitness
@@ -395,14 +464,16 @@ class Genome:
     def calculate_compatibility(self, other):
 
         # Get the number of genes for each
-        gene_count1 = self.get_gene_count()
-        gene_count2 = other.get_gene_count()
+        n_genes1 = len(self.link_genes)
+        n_genes2 = len(other.link_genes)
+        if n_genes1==0 and n_genes2==0:
+            return 0
 
         # They do not use this N in their code, even though they explain it
         # this way in their paper.
         # genetics.cpp:2273
-        N = min(gene_count1, gene_count2)
-        N = N if max(gene_count1, gene_count2)>20 else 1
+        N = min(n_genes1, n_genes2)
+        N = N if max(n_genes1, n_genes2)>20 else 1
 
         excess = self.get_excess_genes(other)
         disjoint = self.get_disjoint_genes(other)
@@ -414,7 +485,9 @@ class Genome:
             assert g1.innov_num == g2.innov_num
 
         # Average weight difference
-        W = sum(abs(g1.weight - g2.weight) for g1, g2 in zip(m1, m2))/len(m1)
+        n_m = max(1, len(m1))
+        W = sum(abs(g1.weight - g2.weight) for g1, g2 in zip(m1, m2))/n_m
+
 
         c1, c2, c3 = self.pop.c1, self.pop.c2, self.pop.c3,
         return (c1*len(excess) + c2*len(disjoint))/N + c3*W
@@ -425,16 +498,16 @@ class Genome:
             self.mutate_add_node()
 
         # Add a link
-        elif random.random() < self.mutate_add_link_prob:
+        elif random.random() < self.pop.mutate_add_link_prob:
             self.mutate_add_link()
 
         # Mutate or enable/disable links
         else:
-            if random.random() < population.mutate_link_weights_prob:
+            if random.random() < self.pop.mutate_link_weights_prob:
                 self.mutate_link_weights()
-            if random.random() < population.mutate_toggle_enable_prob:
+            if random.random() < self.pop.mutate_toggle_enable_prob:
                 self.mutate_toggle_enable()
-            if random.random() < population.mutate_toggle_reenable_prob:
+            if random.random() < self.pop.mutate_toggle_reenable_prob:
                 self.mutate_gene_reenable()
 
 
@@ -443,6 +516,8 @@ class Genome:
         # genetics.cpp:819 Genome::mutate_add_node
 
         n_links = len(self.link_genes)
+        if n_links == 0:
+            return
 
         # genetics.cpp:850 - Bias splitting toward older links
         if n_links < 15:
@@ -464,15 +539,15 @@ class Genome:
         for innov in self.pop.gen_innovations:
             if (innov.innovation_type == NEWNODE and
                 innov.from_node == from_node and
-                innov.to_node == to_node
-                innov.old_innov_num = link_gene.innov_num):
+                innov.to_node == to_node and
+                innov.old_innov_num == link_gene.innov_num):
                 is_new = False
                 break
 
 
         if is_new:
             node_id = self.pop.get_next_node_num()
-            newnode = NodeGene(node_id, innov_num)
+            newnode = NodeGene(node_id)
             self.pop.node_map[node_id] = newnode
 
             innov_num1 = self.pop.get_next_innov_num()
@@ -500,13 +575,58 @@ class Genome:
         self.node_genes.append(newnode)
         self.link_genes.append(link1)
         self.link_genes.append(link2)
+        if len(self.node_genes) != len(set(n.node_id for n in self.node_genes)):
+            print('HERE')
+            print(is_new)
+            print([n.node_id for n in self.node_genes])
+            print([l.innov_num for l in self.link_genes])
+            print('HERE')
 
+    def get_link_by_node_indices(self, i_node1, i_node2):
+        node1 = self.node_genes[i_node1]
+        node2 = self.node_genes[i_node2]
+        for l in self.link_genes:
+            if l.from_node == node1 and l.to_node == node2:
+                return l
+        return None
 
     def mutate_add_link(self):
-        node_1 = random.choice(self.node_genes)
-        node_2 = random.choice([n for n in self.node_genes
-                                if n!=node1 and
-                                (n.node_type not in [INPUT, BIAS]))
+        # All possible node combinations. Excludes having INPUT or BIAS as
+        # to_node. Excludes all places where we already have links
+        possible = [x for x in permutations(range(len(self.node_genes)), 2)
+                    if (self.node_genes[x[1]].node_type not in [INPUT, BIAS])
+                    and (self.get_link_by_node_indices(x[0], x[1]) is None)]
+
+        # If all the link spots are filled
+        if len(possible) == 0:
+            return
+
+        i_node1, i_node2 = random.choice(possible)
+        from_node = self.node_genes[i_node1]
+        to_node = self.node_genes[i_node2]
+
+        is_new = True
+        for innov in self.pop.gen_innovations:
+            if (innov.innovation_type == NEWLINK and
+                innov.from_node == from_node and
+                innov.to_node == to_node
+                ):
+                is_new = False
+                break
+
+        if is_new:
+            weight = random.random() * 10 * (-1)**(random.randint(0, 1))
+            innov_num = self.pop.get_next_innov_num()
+            innov = Innovation(NEWLINK, from_node, to_node, innov_num,
+                               new_weight=weight)
+            self.pop.gen_innovations.append(innov)
+
+        else:
+            weight = innov.new_weight
+            innov_num = innov.innov_num1
+
+        link = LinkGene(from_node, to_node, weight, innov_num)
+        self.link_genes.append(link)
 
 
     def mutate_toggle_enable(self):
@@ -612,9 +732,9 @@ class Genome:
                 child_links.add(in_out)
 
         #FIXME Probably not the cleanest way to do this
-        node_set = set()
-        nodes = []
-        for l in child_links:
+        nodes = [n for n in self.pop.base_nodes]
+        node_set = set(n.node_id for n in nodes)
+        for l in child_genes:
             if l.from_node.node_id not in node_set:
                 node_set.add(l.from_node.node_id)
                 nodes.append(l.from_node)
@@ -622,7 +742,7 @@ class Genome:
                 node_set.add(l.to_node.node_id)
                 nodes.append(l.to_node)
 
-        return Genome(self.pop, nodes=nodes, links=[l.copy() for l in child_links])
+        return Genome(self.pop, nodes=nodes, links=[l.copy() for l in child_genes])
 
 
 
@@ -640,6 +760,8 @@ class Genome:
         returns [G1, G2, G4]
         """
         innovs = {g.innov_num for g in other.link_genes}
+        if not innovs:
+            return []
         max_innov = max(innovs)
         return [g for g in self.link_genes
                 if g.innov_num in innovs]
@@ -656,6 +778,8 @@ class Genome:
         returns [D3]
         """
         innovs = {g.innov_num for g in other.link_genes}
+        if not innovs:
+            return []
         max_innov = max(innovs)
         return [g for g in other.link_genes
                 if g.innov_num < max_innov and g.innov_num not in innovs]
@@ -672,6 +796,8 @@ class Genome:
         returns [E7]
         """
         innovs = {g.innov_num for g in other.link_genes}
+        if not innovs:
+            return []
         max_innov = max(innovs)
         return [g for g in self.link_genes
                 if g.innov_num > max_innov and g.innov_num not in innovs]
@@ -685,6 +811,7 @@ class Genome:
         inputs = []
         outputs = []
         bias = []
+        edges = []
         node_num = dict() #Map from node_id to zero index node number
 
         for i, node in enumerate(self.node_genes):
@@ -701,16 +828,27 @@ class Genome:
 
         # Create edge list.
         for gene in self.link_genes:
-            edges.append((node_num[gene.to_node], node_num[gene.from_node], gene.weight))
+            edges.append((node_num[gene.to_node.node_id],
+                          node_num[gene.from_node.node_id], gene.weight))
 
 
         # Build an adjacency matrix for the network
         n = len(node_num)
         adj_matrix = np.zeros((n, n))
-        for e in edges:
-            adj_matrix[e[:2]] = e[2]
+        try:
+            for e in edges:
+                adj_matrix[e[:2]] = e[2]
+        except:
+            global GENOME
+            GENOME = self
+            print([node.node_id for node in self.node_genes])
+            print()
+            print('len(node_genes)', len(self.node_genes))
+            print('edge', e)
+            print('adj.shape', adj_matrix.shape)
+            sys.exit()
 
-        return Network(adj_marix, inputs, outputs, bias)
+        return Network(adj_matrix, inputs, outputs, bias)
 
 
 # Potentially just a data class
@@ -720,10 +858,10 @@ class LinkGene:
         self.from_node = from_node
         self.to_node = to_node
         self.weight = weight
-        self.innvo_num = innov_num
+        self.innov_num = innov_num
         self.enabled = enabled
 
-        self.attrs = (from_node, to_node, weight, innov, enabled)
+        self.attrs = (from_node, to_node, weight, innov_num, enabled)
 
     def copy(self):
         return LinkGene(*self.attrs)
@@ -815,7 +953,7 @@ class Network:
         # Activation function
         self.sigmoid = lambda x : 1/(1+np.exp(-4.924273*x))
 
-    def activate(self, inputs, max_iters=100):
+    def activate(self, inputs, max_iters=10):
         """ Returns the acvtivation values of the output nodes. These are
         computed by passing a signal through the network until all output nodes are
         active. If after max_iter iterations, the output nodes remain off,
@@ -852,7 +990,9 @@ class Network:
             i += 1
             # Stop if the number of iterations exceeds max_iters
             if i > max_iters:
-                return np.array([np.nan]*len(self.outputs))
+                break
+                #
+                # return np.array([np.nan]*len(self.outputs))
 
         return self.node_vals[self.outputs]
 

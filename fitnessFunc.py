@@ -1,5 +1,6 @@
 import numpy as np
 from flappyNeat import main
+import sys
 
 def fit_xor(network):
     """
@@ -20,13 +21,73 @@ def fit_xor(network):
 
     outputs = np.zeros(samples)
     for i in range(len(X)):
-        outputs[i] = network.activate(X[i])
+        try:
+            outputs[i] = network.activate(X[i])
+        except:
+            print(network.activate(X[i]))
+            sys.exit()
+
 
     fitness = np.sum(Y*(outputs>.5))/float(samples)
 
     return fitness
 
-def fit_dparity(network,num_inputs,samples=100):
+def get_determined_fit_dparity(num_inputs):
+    if num_inputs > 15:
+        raise ValueError('Thats too big')
+    samples = 2**num_inputs
+    X = np.array([[int(x) for x in bin(i)[2:].zfill(num_inputs)]
+                   for i in range(samples)])
+    def determined_fit_dparity(network):
+        # Compute parity of each row of X
+        Y = X.sum(axis=1)%2
+
+        outputs = np.zeros(samples)
+        for i in range(samples):
+            outputs[i] = network.activate(X[i])
+
+        fitness = np.sum(Y*outputs)/float(samples)
+        return fitness
+
+    return determined_fit_dparity
+
+
+
+def get_fit_dparity(num_inputs, samples=100):
+    def fit_dparity(network):
+        """
+        Function for determining how well the network solves the
+        d-parity problem. If x is a vector of zeros and ones
+        dparity(x) returns 1 if there are an odd number of ones
+        and returns 0 if there are an even number of ones.
+        (Generalized xor)
+
+        Parameters
+        ----------
+        network (neat network object) that accepts num_inputs and has one output
+
+        Returns
+        -------
+        fitness (a fitness score)
+        """
+
+        # Create random vectors of zeros and ones
+        X = 1*(np.random.normal(size=(samples,num_inputs)) > 0)
+        # Compute parity of each row of X
+        Y = X.sum(axis=1)%2
+
+        outputs = np.zeros(samples)
+        for i in range(samples):
+            outputs[i] = network.activate(X[i])
+
+        fitness = np.sum(Y*outputs)/float(samples)
+        return fitness
+
+    return fit_dparity
+
+
+
+def fit_dparity(network, num_inputs, samples=100):
     """
     Function for determining how well the network solves the
     d-parity problem. If x is a vector of zeros and ones
@@ -112,6 +173,7 @@ def fit_pole_balance(network,
     x = 0
     x_vel = 0
     x_acc = 0
+    tau = time_step
 
     #Run simulation
     time_upright = 0
