@@ -508,6 +508,7 @@ class Genome:
                                 if n!=node1 and
                                 (n.node_type not in [INPUT, BIAS]))
 
+
     def mutate_toggle_enable(self):
         # See gnetics.cpp:779 - must check to make sure the in-node has other
         # enabled out-node links
@@ -806,13 +807,13 @@ class Network:
         self.bias = bias_nodes
 
         # Node activation values
-        self.node_vals = np.zeros(self.A.shape[0])
+        self.node_vals = np.zeros(self.A.shape[0]) + .5
 
         # Bool to check if node was activated in the current time step
         self.active_nodes = np.zeros((self.A.shape[0]), dtype=bool)
 
         # Activation function
-        self.sigmoid = lambda x : 1./(1+np.exp(-4.924273*x))
+        self.sigmoid = lambda x : 1/(1+np.exp(-4.924273*x))
 
     def activate(self, inputs, max_iters=100):
         """ Returns the acvtivation values of the output nodes. These are
