@@ -6,6 +6,8 @@ INPUT = 'input'
 OUTPUT = 'output'
 HIDDEN = 'hidden'
 BIAS = 'bias'
+NEWNODE = 'newnode'
+NEWLINK = 'newlink'
 
 class NEAT:
     """"""
@@ -29,15 +31,17 @@ class Population:
         self.mate_only_prob = 0.2 # Don't think this is found in the paper, but
                                   # it's in their code...
 
-        mutate_add_node_prob = 0.03
-        mutate_add_link_prob = 0.05
-        mutate_link_weights_prob = 0.8
-        mutate_toggle_enable_prob = 0.0
-        mutate_toggle_reenable_prob = 0.0
+        self.mutate_add_node_prob = 0.03
+        self.mutate_add_link_prob = 0.05
+        self.mutate_link_weights_prob = 0.8
+        self.mutate_toggle_enable_prob = 0.0
+        self.mutate_toggle_reenable_prob = 0.0
 
 
-        pop_champ = None
-        pop_champs = []
+        self.pop_champ = None
+        self.pop_champs = []
+
+        self.gen_innovations = []
 
         self.species = dict()
         self.all_genomes = []
@@ -136,16 +140,14 @@ class Population:
 
         new_genomes = []
         # Calculate adjusted fitness for species
-        for spec in self.species:
+        for spec in self.species.values():
             spec.adjust_fitness()
 
         tot_adj_fit = self.get_total_adj_fitness()
 
         print('Reproducing')
-        for spec in self.species:
+        for spec in self.species.values():
             percent_offspring = sum(g.adj_fitness/tot_adj_fit for g in spec.genomes)
-            # Cull before reproducing
-            spec.cull()
 
             n_offspring = round(self.pop_size * percent_offspring)
             new_genomes.append(spec.reproduce(n_offspring))
@@ -156,7 +158,7 @@ class Population:
 
     def get_random_champ(weighted=False, spec=None):
 
-        species = [s for s in self.species if s is not spec]
+        species = [s for s in self.species.values() if s is not spec]
 
         # If there is only one species
         if len(species) == 0:
@@ -196,7 +198,7 @@ class Population:
                 # check compatibility with that species champion
                 pass
             else:
-                for spec in self.species:
+                for spec in self.species.values():
                     # check compatibility until found
                     pass
                 else: # make a new spec
@@ -217,14 +219,8 @@ class Population:
             if self.gen_num - spec.gen_last_improved > self.species_dropoff_age:
                 self.species.pop(spec_num)
 
-    def reproduce(self):
-        # reps = [random.choice(spec) for spec in self.species]
-        # Species get to produce a different number of offspring in proportion
-        # to
-        pass
-
 class Species:
-    """"""
+    """Holds a set of genomes, performs reproduction step."""
     def __init__(self, population, species_num):
         self.pop = population
         self.species_num = species_num
@@ -245,7 +241,6 @@ class Species:
     def flush(self):
         """Removes all the genomes from the species."""
         self.genomes = []
-
 
     def add_genome(self, genome):
         """Adds a genome to the species."""
@@ -277,10 +272,6 @@ class Species:
         return random.choice(self.genomes)
 
     def reproduce(self, n_offspring=0):
-        # interspecies offspring?
-        # mutation
-        # crossover
-
         # NOTE It looks like they have a mate_only_prob. I haven't been able to
         # find this in the paper, but it's in genetics.cpp:3626 and it's set to
         # .2 in the settings.
@@ -316,7 +307,8 @@ class Species:
                 else:
                     p2 = self.get_random_genome()
 
-                genome = p1.get_crossover(p2)
+
+                genome = p1.get_multipoint_crossover(p2)
                 crossed_over = True
 
             # Decide if the new genome will mutate
@@ -330,14 +322,6 @@ class Species:
         return new_genomes
 
 
-
-
-
-        # genetics.cpp:1354 - Between two parents, first order in higher
-        # fitness, second ordering is lower gene count.
-        # Looks like if the fitness and the gene count is the same, they just
-        # use the second parents excess/disjoin (as if it was better). Very
-        # arbitrary.
 
     # Offspring are computed for each genome using adjusted fitness and then
     # shared with the species.
@@ -436,12 +420,15 @@ class Genome:
         return (c1*len(excess) + c2*len(disjoint))/N + c3*W
 
     def mutate(self):
+        # Add a node
         if random.random() < self.pop.mutate_add_node_prob:
             self.mutate_add_node()
 
+        # Add a link
         elif random.random() < self.mutate_add_link_prob:
             self.mutate_add_link()
 
+        # Mutate or enable/disable links
         else:
             if random.random() < population.mutate_link_weights_prob:
                 self.mutate_link_weights()
@@ -453,27 +440,73 @@ class Genome:
 
 
     def mutate_add_node(self):
-        # FIXME
         # genetics.cpp:819 Genome::mutate_add_node
-        link_gene = random.choice(self.link_genes)
+
+        n_links = len(self.link_genes)
+
+        # genetics.cpp:850 - Bias splitting toward older links
+        if n_links < 15:
+            i_link = 0
+            while random.random()<0.3:
+                i_link = (i_link + 1) % (n_links)
+        else:
+            i_link = np.random.randint(0, n_links)
+
+        link_gene = self.link_genes[i_link]
+        from_node = link_gene.from_node
+        to_node = link_gene.to_node
 
         # Disable the link
         link_gene.enabled = False
 
-        # New node gene
-        node_id = len(node_genes) + 1
-        innov_num = get_node_innov_num(node_id)
-        new_node = NodeGene(node_id, innov_num)
+        # Check to see if the node is novel for this generation
+        is_new = True
+        for innov in self.pop.gen_innovations:
+            if (innov.innovation_type == NEWNODE and
+                innov.from_node == from_node and
+                innov.to_node == to_node
+                innov.old_innov_num = link_gene.innov_num):
+                is_new = False
+                break
 
-        self.pop.node_map[node_id] = new_node
 
-        self.node_genes.append(new_node)
+        if is_new:
+            node_id = self.pop.get_next_node_num()
+            newnode = NodeGene(node_id, innov_num)
+            self.pop.node_map[node_id] = newnode
 
-        # Two new links
-        gene1 = None
+            innov_num1 = self.pop.get_next_innov_num()
+            innov_num2 = self.pop.get_next_innov_num()
+
+            innov = Innovation(NEWNODE, from_node, to_node, innov_num1,
+                               innov_num2, newnode_id=node_id,
+                               old_innov_num=link_gene.innov_num)
+            self.pop.gen_innovations.append(innov)
+
+        else:
+            newnode = self.pop.node_map[innov.newnode_id]
+            innov_num1 = innov.innov_num1
+            innov_num2 = innov.innov_num2
+
+
+        # Link into new node gets weight 1
+        link1 = LinkGene(from_node, newnode, 1.0,
+                         innov_num1)
+
+        # Link out of new node gets old weight
+        link2 = LinkGene(newnode, to_node, link_gene.weight,
+                         innov_num2)
+
+        self.node_genes.append(newnode)
+        self.link_genes.append(link1)
+        self.link_genes.append(link2)
+
 
     def mutate_add_link(self):
-        pass
+        node_1 = random.choice(self.node_genes)
+        node_2 = random.choice([n for n in self.node_genes
+                                if n!=node1 and
+                                (n.node_type not in [INPUT, BIAS]))
 
     def mutate_toggle_enable(self):
         # See gnetics.cpp:779 - must check to make sure the in-node has other
@@ -540,6 +573,13 @@ class Genome:
         pass
 
     def get_multipoint_crossover(self, other):
+
+        # genetics.cpp:1354 - Between two parents, first order in higher
+        # fitness, second ordering is lower gene count.
+        # Looks like if the fitness and the gene count is the same, they just
+        # use the second parents excess/disjoin (as if it was better). Very
+        # arbitrary.
+
         # Make p1 the better parent
         p1, p2 = sorted([self, other], reverse=True)
 
@@ -565,7 +605,7 @@ class Genome:
         child_genes = []
         child_links = set()
         for g in genes:
-            in_out = (g.in_node.node_id, g.out_node.node_id)
+            in_out = (g.from_node.node_id, g.to_node.node_id)
             if in_out not in child_links:
                 child_genes.append(g.copy())
                 child_links.add(in_out)
@@ -574,12 +614,12 @@ class Genome:
         node_set = set()
         nodes = []
         for l in child_links:
-            if l.in_node.node_id not in node_set:
-                node_set.add(l.in_node.node_id)
-                nodes.append(l.in_node)
-            if l.out_node.node_id not in node_set:
-                node_set.add(l.out_node.node_id)
-                nodes.append(l.out_node)
+            if l.from_node.node_id not in node_set:
+                node_set.add(l.from_node.node_id)
+                nodes.append(l.from_node)
+            if l.to_node.node_id not in node_set:
+                node_set.add(l.to_node.node_id)
+                nodes.append(l.to_node)
 
         return Genome(self.pop, nodes=nodes, links=[l.copy() for l in child_links])
 
@@ -725,9 +765,12 @@ class NodeGene:
 # Potentially just a data class
 class Innovation:
     """"""
-    def __init__(self):
-        self.node_in = node_in
-        self.node_out = node_out
+    def __init__(self, innovation_type, from_node, to_node,
+                 innov_num1=None, innov_num2=None, new_weight=None,
+                 newnode_id=None, old_innov_num=None, recursive=False):
+        self.innovation_type = innovation_type
+        self.from_node = from_node
+        self.to_node = to_node
         self.innov_num1 = innov_num1
         self.innov_num2= innov_num2
         # Their code remembers the weight that this innovation used, assigning
