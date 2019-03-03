@@ -1,4 +1,5 @@
 import numpy as np
+from flappyNeat import main
 
 def fit_xor(network):
     """
@@ -131,3 +132,9 @@ def fit_pole_balance(network,
         time_upright += tau
 
     return time_upright
+
+
+def fit_flappy(network):
+    "Returns time the bird survived"
+    fitness = main(network)
+    return fitness
