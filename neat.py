@@ -130,6 +130,36 @@ class Population:
     def get_champion(self):
         return max(self.all_genomes)
 
+    def get_biggest(self):
+        return max(self.all_genomes,
+            key=lambda g: len(g.node_genes) + len(g.link_genes))
+
+    def verify_genomes(self):
+        unaccounted = []
+        for spec in self.species.values():
+            for g in spec.genomes:
+                if g not in self.all_genomes:
+                    unaccounted.append(g)
+        if unaccounted:
+            self.unaccounted = unaccounted
+            print('unaccounted')
+            sys.exit()
+
+        double = []
+        for g in self.all_genomes:
+            c = sum(1 for s in self.species.values() if g in s.genomes)
+            if c > 1:
+                double.append(g)
+                for s in self.species.values():
+                    if g in s.genomes:
+                        print(s.species_num)
+        if double:
+            self.double = double
+            print('double', len(double))
+            sys.exit()
+
+
+
     def update_overall_pop_champ(self):
         if self.overall_pop_champ is None:
             self.overall_pop_champ = self.pop_champ
@@ -171,7 +201,39 @@ class Population:
         self.remove_unimproved_species()
 
         tot_adj_fit = self.get_total_adj_fitness()
+        tot2 = sum(s.get_total_adj_fitness() for s in self.species.values())
+        if tot_adj_fit != tot2:
+            print('1-   ', tot_adj_fit)
+            print('2-   ', tot2)
+            print(sum(sum(g.adj_fitness for g in s.genomes) for s in self.species.values()))
         print(tot_adj_fit)
+        self.verify_genomes()
+
+        total_offspring = 0
+        offspring_counts = []
+        percents = []
+        sums = []
+
+        for spec in self.species.values():
+            spec_fitness = spec.get_total_adj_fitness()
+            percent_offspring = spec_fitness / tot_adj_fit
+            if len(self.species)==1:
+                percent_offspring = 1
+            n_offspring = int(self.pop_size * percent_offspring)
+            total_offspring += n_offspring
+            offspring_counts.append(n_offspring)
+            percents.append(percent_offspring)
+            sums.append(spec_fitness)
+
+        if total_offspring > 160:
+            print('NUM SPECIES', len(self.species))
+            print(offspring_counts)
+            print(percents)
+            print()
+            print(tot_adj_fit)
+            print(sums)
+            print(len(self.all_genomes))
+            print(sum(len(s) for s in self.species.values()))
 
         print('Reproducing')
         for spec in self.species.values():
@@ -195,6 +257,8 @@ class Population:
         print('Computing fitness')
         self.compute_pop_fitness(fitness_func)
         print()
+        if len(self.all_genomes) > 160:
+            sys.exit()
 
 
     def get_random_champ(self, weighted=False, spec=None):
@@ -220,7 +284,7 @@ class Population:
         else:
             return np.random.choice(species).get_champion()
 
-    def speciate(self):
+    def speciate(self, track=None):
         """Separates organisms into species.
 
         Checks compatibility of each organism against each spec, using the
@@ -246,7 +310,7 @@ class Population:
                 # check compatibility until found
                 if spec.is_compatible(genome):
                     spec.add_genome(genome)
-                    continue
+                    break
             else: # make a new spec
                 spec_num = self.get_next_species_num()
                 spec = Species(self, spec_num)
@@ -827,9 +891,10 @@ class Genome:
                 bias.append(i)
 
         # Create edge list.
-        for gene in self.link_genes:
-            edges.append((node_num[gene.to_node.node_id],
-                          node_num[gene.from_node.node_id], gene.weight))
+        for link in self.link_genes:
+            if link.enabled:
+                edges.append((node_num[link.to_node.node_id],
+                              node_num[link.from_node.node_id], gene.weight))
 
 
         # Build an adjacency matrix for the network
@@ -944,16 +1009,10 @@ class Network:
         self.outputs = output_nodes
         self.bias = bias_nodes
 
-        # Node activation values
-        self.node_vals = np.zeros(self.A.shape[0]) + .5
-
-        # Bool to check if node was activated in the current time step
-        self.active_nodes = np.zeros((self.A.shape[0]), dtype=bool)
-
         # Activation function
         self.sigmoid = lambda x : 1/(1+np.exp(-4.924273*x))
 
-    def activate(self, inputs, max_iters=10):
+    def activate(self, inputs, max_iters=10, verbose=False):
         """ Returns the acvtivation values of the output nodes. These are
         computed by passing a signal through the network until all output nodes are
         active. If after max_iter iterations, the output nodes remain off,
@@ -961,6 +1020,12 @@ class Network:
 
         Additionally, we reactivate the input nodes at each time step.
         """
+        # Node activation values
+        self.node_vals = np.zeros(self.A.shape[0]) + .5
+
+        # Bool to check if node was activated in the current time step
+        self.active_nodes = np.zeros((self.A.shape[0]), dtype=bool)
+
         # Label inputs and bias as active
         self.active_nodes[self.inputs] = True
         self.active_nodes[self.bias] = True
@@ -969,13 +1034,15 @@ class Network:
         # through the network
 
         i=0
-        while not self.active_nodes[self.outputs].all():
+        # while not self.active_nodes[self.outputs].all():
+        while True:
 
             # Activate inputs
             # NOTE: This step disallows recurrent connections between hidden and input nodes
 
             self.node_vals[self.inputs] = inputs
             self.node_vals[self.bias] = 1.
+
             # Drive the activations one time step farther through the network
             self.node_vals = self.A.dot(self.node_vals)
 
@@ -984,6 +1051,8 @@ class Network:
 
             # Apply sigmoid to active nodes
             self.node_vals[self.active_nodes] = self.sigmoid(self.node_vals[self.active_nodes])
+            if verbose:
+                print(self.node_vals)
 
 
 
