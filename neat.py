@@ -1012,6 +1012,28 @@ class Network:
         # Activation function
         self.sigmoid = lambda x : 1/(1+np.exp(-4.924273*x))
 
+    def activate2(self, inputs, max_iters=10, verbose=False):
+        self.node_vals = np.zeros(self.A.shape[0])
+        self.active_nodes = np.zeros((self.A.shape[0]), dtype=bool)
+        self.active_nodes[self.inputs] = True
+        self.active_nodes[self.bias] = True
+
+        i = 0
+        while True:
+            self.node_vals[self.inputs] = inputs
+            self.node_vals[self.bias] = 1.
+
+            self.node_vals[self.active_nodes] = self.sigmoid(self.node_vals[self.active_nodes])
+            if i > max_iters:
+                break
+                #
+                # return np.array([np.nan]*len(self.outputs))
+
+        return self.node_vals[self.outputs]
+
+
+
+
     def activate(self, inputs, max_iters=10, verbose=False):
         """ Returns the acvtivation values of the output nodes. These are
         computed by passing a signal through the network until all output nodes are
