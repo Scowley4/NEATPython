@@ -27,7 +27,7 @@ class Population:
         self.c2 = c2 # Disjoin gene coefficient
         self.c3 = c3 # Weight different coefficient
         self.survival_thresh = 0.3
-        self.species_dropoff_age = 15 #Not sure about this
+        self.species_dropoff_age = 35 #Not sure about this
         self.mutate_only_prob = 0.25 # From the paper
         self.interspecies_mate_rate = 0.001
         self.mate_only_prob = 0.2 # Don't think this is found in the paper, but
@@ -116,6 +116,10 @@ class Population:
         # Make the first genome
         genesis_genome = Genome(self, nodes=nodes, links=links)
 
+        # Add initial links
+        for in_node in in_nodes:
+            genesis_genome.add_specific_link(in_node, out_nodes[0], 0)
+
         # Make the population just this genome
         self.all_genomes = [genesis_genome]
 
@@ -185,14 +189,19 @@ class Population:
 
 
     def next_epoch(self, fitness_func):
+        self.gen_innovations = []
+        self.gen_num += 1
+
+        self.update_pop_champ()
+        self.update_overall_pop_champ()
+
+        print('GEN:', self.gen_num)
+
         if self.overall_pop_champ is not None:
             print('BEST', self.overall_pop_champ.fitness)
         print('Most Nodes', len(self.get_most_nodes().node_genes))
         print('Most Links', len(self.get_most_links().link_genes))
-        self.gen_innovations = []
-        self.gen_num += 1
-        self.update_pop_champ()
-        self.update_overall_pop_champ()
+
 
         new_genomes = []
         # Calculate adjusted fitness for species
@@ -259,6 +268,8 @@ class Population:
         print()
         if len(self.all_genomes) > 160:
             sys.exit()
+        if len(self.all_genomes) == 0:
+            pass
 
 
     def get_random_champ(self, weighted=False, spec=None):
@@ -692,6 +703,10 @@ class Genome:
         link = LinkGene(from_node, to_node, weight, innov_num)
         self.link_genes.append(link)
 
+    def add_specific_link(self, from_node, to_node, weight):
+        innov_num = self.pop.get_next_innov_num()
+        link = LinkGene(from_node, to_node, weight, innov_num)
+        self.link_genes.append(link)
 
     def mutate_toggle_enable(self):
         # See gnetics.cpp:779 - must check to make sure the in-node has other
@@ -894,7 +909,7 @@ class Genome:
         for link in self.link_genes:
             if link.enabled:
                 edges.append((node_num[link.to_node.node_id],
-                              node_num[link.from_node.node_id], gene.weight))
+                              node_num[link.from_node.node_id], link.weight))
 
 
         # Build an adjacency matrix for the network
@@ -1012,6 +1027,22 @@ class Network:
         # Activation function
         self.sigmoid = lambda x : 1/(1+np.exp(-4.924273*x))
 
+    def visualize(self):
+        def row_string(row):
+            s = '[' + ', '.join('{:05.3f}'.format(val) for val in row) + ']'
+            return s
+
+        for i in range(len(self.A)):
+            if i in self.inputs:
+                print('I:', end='')
+            elif i in self.bias:
+                print('B:', end='')
+            elif i in self.outputs:
+                print('O:', end='')
+            else:
+                print('H:', end='')
+            print(row_string(self.A[i]))
+
     def activate2(self, inputs, max_iters=10, verbose=False):
         self.node_vals = np.zeros(self.A.shape[0])
         self.active_nodes = np.zeros((self.A.shape[0]), dtype=bool)
@@ -1043,7 +1074,7 @@ class Network:
         Additionally, we reactivate the input nodes at each time step.
         """
         # Node activation values
-        self.node_vals = np.zeros(self.A.shape[0]) + .5
+        self.node_vals = np.zeros(self.A.shape[0])
 
         # Bool to check if node was activated in the current time step
         self.active_nodes = np.zeros((self.A.shape[0]), dtype=bool)

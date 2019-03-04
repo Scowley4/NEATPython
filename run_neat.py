@@ -24,7 +24,7 @@ pop = Population()
 # while True:
 #    pop.next_epoch(fit_xor)
 
-n=k
+n=2
 fit_nparity = get_determined_fit_dparity(n)
 pop.spawn_initial_population(n, 1)
 while True:
