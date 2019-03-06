@@ -1,4 +1,7 @@
 import numpy as np
+import sys
+from flappyNeat import main
+del sys.modules['flappyNeat']
 from flappyNeat import main
 import sys
 from scipy.integrate import odeint
@@ -151,11 +154,11 @@ def fit_pole_balance(network,
 
 
     # Given a particular force value, create the system:
-    
+
     def makeSystem(force):
-        
+
         #Differential equations (I've checked these by hand):
-        
+
         def angular_accel(theta,theta_vel):
 
             # This equation comes from the paper cited above
@@ -170,19 +173,19 @@ def fit_pole_balance(network,
         def cart_accel(theta,theta_vel,theta_acc):
 
             # This equation comes from the paper above
-            
+
             a = (theta_vel**2)*np.sin(theta) - theta_acc*np.cos(theta)
             x_acc = (force + pole_mass*pole_len*a)/(cart_mass+pole_mass)
 
             return x_acc
-        
+
         def F(x,t):
             theta_acc = angular_accel(x[2],x[3])
             x_acc = cart_accel(x[2],x[3],theta_acc)
             return np.array([x[1], x_acc, x[3], theta_acc])
-        
+
         return F
-        
+
     # Initial conditions:
     theta = 0
     theta_vel = 0
@@ -200,6 +203,6 @@ def fit_pole_balance(network,
         # Simulate system
         x,x_vel,theta,theta_vel = odeint(F,y0,t)[1]
         t = np.linspace(t[1],t[1]+time_step,2)
-        
+
     return t[0]
-        
+

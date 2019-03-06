@@ -19,16 +19,16 @@ def check_random_compatibility(pop, num):
     return comp
 
 
-pop = Population()
+pop = Population(pop_size=100)
 # pop.spawn_initial_population(2, 1)
 # while True:
 #    pop.next_epoch(fit_xor)
 
-n=2
-fit_nparity = get_determined_fit_dparity(n)
-pop.spawn_initial_population(n, 1)
-while True:
-    pop.next_epoch(fit_nparity)
+# n=2
+# fit_nparity = get_determined_fit_dparity(n)
+# pop.spawn_initial_population(n, 1)
+# while True:
+#     pop.next_epoch(fit_nparity)
 
 # n=5
 # fit_nparity = get_fit_dparity(n)
@@ -40,8 +40,8 @@ while True:
 # while True:
 #     pop.next_epoch(fit_pole_balance)
 
-# pop.spawn_initial_population(10, 1)
-# while True:
-#     pop.next_epoch(fit_flappy)
+pop.spawn_initial_population(10, 1)
+while True:
+    pop.next_epoch(fit_flappy)
 
 

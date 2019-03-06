@@ -3,6 +3,7 @@ import sys
 import numpy as np
 from itertools import permutations
 import random
+import time
 
 INPUT = 'input'
 OUTPUT = 'output'
@@ -68,10 +69,15 @@ class Population:
         return self.node_num
 
     def compute_pop_fitness(self, fitness_func):
+        start = time.time()
         for spec in self.species.values():
             for genome in spec.genomes:
                 network = genome.get_network()
                 genome.fitness = fitness_func(network)
+                print(genome.fitness, end='\t')
+        print()
+        print(time.time()-start)
+        print()
 
     # def get_average_fitness(self):
     #     total_fit = 0
@@ -91,6 +97,23 @@ class Population:
 
     def get_average_fitness(self):
         return self.get_total_fitness()/len(all_genomes)
+
+    def spawn_population_from_genome(self, genome):
+        self.node_map = {n.node_id: n for n in genome.node_genes}
+        self.node_num = max(self.node_map.keys()) + 1
+        self.base_nodes = [n for n in genome.node_genes
+                           if n.node_type in [INPUT, OUTPUT, BIAS]]
+
+        # Make the population just this genome
+        self.all_genomes = [genome]
+
+        # Make the first spec
+        spec_num = self.get_next_species_num()
+        spec = Species(self, spec_num)
+        spec.add_genome(genome)
+        spec.champ = genome
+
+        self.species[spec_num] = spec
 
     def spawn_initial_population(self, n_inputs, n_outputs):
         """Population of all the same topology with weights slightly
@@ -210,12 +233,7 @@ class Population:
         self.remove_unimproved_species()
 
         tot_adj_fit = self.get_total_adj_fitness()
-        tot2 = sum(s.get_total_adj_fitness() for s in self.species.values())
-        if tot_adj_fit != tot2:
-            print('1-   ', tot_adj_fit)
-            print('2-   ', tot2)
-            print(sum(sum(g.adj_fitness for g in s.genomes) for s in self.species.values()))
-        print(tot_adj_fit)
+        print('tot_adj_fit', tot_adj_fit)
         self.verify_genomes()
 
         total_offspring = 0

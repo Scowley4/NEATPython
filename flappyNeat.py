@@ -1,4 +1,5 @@
 from itertools import cycle
+import configparser
 import random
 import sys
 
@@ -6,7 +7,7 @@ import pygame
 from pygame.locals import *
 
 
-FPS = 30
+FPS = 200
 SCREENWIDTH  = 288
 SCREENHEIGHT = 512
 # amount by which base can maximum shift to left
@@ -14,6 +15,14 @@ PIPEGAPSIZE  = 100 # gap between upper and lower part of pipe
 BASEY        = SCREENHEIGHT * 0.79
 # image, sound and hitmask  dicts
 IMAGES, SOUNDS, HITMASKS = {}, {}, {}
+PARSER = configparser.ConfigParser()
+
+PARSER.read('configs.txt')
+game_settings = PARSER['GAME']
+if 'FPS' in game_settings:
+    FPS = int(game_settings['FPS'])
+if 'PIPEGAPSIZE' in game_settings:
+    PIPEGAPSIZE = int(game_settings['PIPEGAPSIZE'])
 
 # list of all possible players (tuple of 3 positions of flap)
 PLAYERS_LIST = (
@@ -149,11 +158,14 @@ def main(network=None):
 
         # Get total time
         totTime = pygame.time.get_ticks()
+        #print(crashInfo['score'],  end='\t')
 
-        return totTime
+        return crashInfo['score']
 
 
 def mainGame(network=None):
+    pipegapsize = PIPEGAPSIZE
+    show_score = True
 
     movementInfo = {
                     'playery': int((SCREENHEIGHT - IMAGES['player'][0].get_height()) / 2),
@@ -169,8 +181,8 @@ def mainGame(network=None):
     baseShift = IMAGES['base'].get_width() - IMAGES['background'].get_width()
 
     # get 2 new pipes to add to upperPipes lowerPipes list
-    newPipe1 = getRandomPipe()
-    newPipe2 = getRandomPipe()
+    newPipe1 = getRandomPipe(pipegapsize)
+    newPipe2 = getRandomPipe(pipegapsize)
 
     # list of upper pipes
     upperPipes = [
@@ -211,7 +223,8 @@ def mainGame(network=None):
                 if playery > -2 * IMAGES['player'][0].get_height():
                     playerVelY = playerFlapAcc
                     playerFlapped = True
-                    SOUNDS['wing'].play()
+
+                    #SOUNDS['wing'].play()
 
 
 
@@ -221,6 +234,7 @@ def mainGame(network=None):
         if crashTest[0]:
             return {
                 'y': playery,
+                'x': playerx,
                 'groundCrash': crashTest[1],
                 'basex': basex,
                 'upperPipes': upperPipes,
@@ -229,6 +243,57 @@ def mainGame(network=None):
                 'playerVelY': playerVelY,
                 'playerRot': playerRot,
             }
+
+        # find the four closest pipes
+        playerMidPos = playerx + IMAGES['player'][0].get_width() / 2
+
+        for i in range(len(upperPipes)):
+            if playerMidPos < upperPipes[i]['x'] + IMAGES['pipe'][0].get_width():
+                # next two pipe x pos
+                uPipe1X = upperPipes[i]['x']
+                uPipe2X = upperPipes[i]['x']
+
+                # next two pipe y pos
+                uPipe1Y = upperPipes[i]['y']
+                uPipe2Y = upperPipes[i+1]['y']
+
+                break
+
+        for i in range(len(lowerPipes)):
+            if playerMidPos < lowerPipes[i]['x'] + IMAGES['pipe'][0].get_width():
+                # next two pipe x pos
+                lPipe1X = lowerPipes[i]['x']
+                lPipe2X = lowerPipes[i]['x']
+
+                # next two pipe y pos
+                lPipe1Y = lowerPipes[i]['y']
+                lPipe2Y = lowerPipes[i+1]['y']
+
+                break
+
+        # NETWORK DECIDES TO FLAP OR NOT
+        # print(playery)
+        # print("Net output: "+str(network.activate([playery,0])))
+        input_vals = [playery, playerVelY,
+                      uPipe1X, uPipe1Y,
+                      lPipe1X, lPipe1Y,
+                      uPipe2X, uPipe2Y,
+                      lPipe2X, lPipe2Y]
+
+        input_dict = {'Y': playery,
+                      'dY': playerVelY,
+                      'E1':'',
+                      'E2':'',
+                      'P1UX': uPipe1X,
+                      'P1LX': lPipe1X,
+                      'P1UY': uPipe1Y,
+                      'P1LY': lPipe1Y,
+                      'P2UX': uPipe2X,
+                      'P2LX': lPipe2X,
+                      'P2UY': uPipe2Y,
+                      'P2LY': lPipe2Y,
+                      }
+        input_dict = {'{:>4}'.format(k):'{:>5}'.format(v) for k,v in input_dict.items()}
 
         """
         NEURAL NETWORK MAKES A MOVE HERE
@@ -255,58 +320,28 @@ def mainGame(network=None):
         If output is greater than .5 --> FLAP
         if output is .5 or less      --> DO NOTHING
         """
+
         if network is not None:
-            # find the four closest pipes
-            playerMidPos = playerx + IMAGES['player'][0].get_width() / 2
-
-            for i in range(len(upperPipes)):
-                if playerMidPos < upperPipes[i]['x'] + IMAGES['pipe'][0].get_width():
-                    # next two pipe x pos
-                    uPipe1X = upperPipes[i]['x']
-                    uPipe2X = upperPipes[i]['x']
-
-                    # next two pipe y pos
-                    uPipe1Y = upperPipes[i]['y']
-                    uPipe2Y = upperPipes[i+1]['y']
-
-                    break
-
-            for i in range(len(lowerPipes)):
-                if playerMidPos < lowerPipes[i]['x'] + IMAGES['pipe'][0].get_width():
-                    # next two pipe x pos
-                    lPipe1X = upperPipes[i]['x']
-                    lPipe2X = upperPipes[i]['x']
-
-                    # next two pipe y pos
-                    lPipe1Y = upperPipes[i]['y']
-                    lPipe2Y = upperPipes[i+1]['y']
-
-                    break
-
-            # NETWORK DECIDES TO FLAP OR NOT
-            print(playery)
-            print("Net output: "+str(network.activate([playery,0])))
-
-            if network.activate([playery,playerVelY,
-                                 uPipe1X,uPipe1Y,
-                                 lPipe1X,lPipe1Y,
-                                 uPipe2X,uPipe2Y,
-                                 lPipe2X,lPipe2Y] ) > .5:
+            if network.activate(input_vals) > .5:
 
                 if playery > -2 * IMAGES['player'][0].get_height():
                     playerVelY = playerFlapAcc
                     playerFlapped = True
-                    SOUNDS['wing'].play()
+                    # SOUNDS['wing'].play()
 
         """ END NEURAL NET CODE"""
+
+
+
 
         # check for score
         playerMidPos = playerx + IMAGES['player'][0].get_width() / 2
         for pipe in upperPipes:
             pipeMidPos = pipe['x'] + IMAGES['pipe'][0].get_width() / 2
             if pipeMidPos <= playerMidPos < pipeMidPos + 4:
-                score += 1
+                score += 50
                 SOUNDS['point'].play()
+        score += 1
 
         # playerIndex basex change
         if (loopIter + 1) % 3 == 0:
@@ -337,7 +372,7 @@ def mainGame(network=None):
 
         # add new pipe when first pipe is close to left of screen
         if 25 < upperPipes[0]['x'] < 30:
-            newPipe = getRandomPipe()
+            newPipe = getRandomPipe(pipegapsize)
             upperPipes.append(newPipe[0])
             lowerPipes.append(newPipe[1])
 
@@ -355,7 +390,11 @@ def mainGame(network=None):
 
         SCREEN.blit(IMAGES['base'], (basex, BASEY))
         # print score so player overlaps the score
-        showScore(score)
+
+        if show_score:
+            showScore(score)
+            showData(input_dict)
+
 
         # Player rotation has a threshold
         visibleRot = playerRotThr
@@ -366,6 +405,25 @@ def mainGame(network=None):
         SCREEN.blit(playerSurface, (playerx, playery))
 
         pygame.display.update()
+        while True:
+            try:
+                PARSER.read('configs.txt')
+                game_settings = PARSER['GAME']
+                if 'FPS' in game_settings:
+                    FPS = int(game_settings['FPS'])
+                if 'PIPEGAPSIZE' in game_settings:
+                    pipegapsize = int(game_settings['PIPEGAPSIZE'])
+                if score >= int(game_settings['MAXPOINTS']):
+                    playery = -100
+                show_score = game_settings.getboolean('SHOWSCORE')
+
+                # with open('settings.txt', 'r') as infile:
+                #     FPS = int(infile.readline().strip())
+                break
+            except Exception as e:
+                print(e)
+                continue
+
         FPSCLOCK.tick(FPS)
 
 
@@ -380,17 +438,20 @@ def playerShm(playerShm):
         playerShm['val'] -= 1
 
 
-def getRandomPipe():
+def getRandomPipe(pipegapsize=PIPEGAPSIZE):
     """returns a randomly generated pipe"""
     # y of gap between upper and lower pipe
-    gapY = random.randrange(0, int(BASEY * 0.6 - PIPEGAPSIZE))
+    gapY = random.randrange(0, int(BASEY * 0.6 - pipegapsize))
     gapY += int(BASEY * 0.2)
     pipeHeight = IMAGES['pipe'][0].get_height()
     pipeX = SCREENWIDTH + 35
+    # print('gap',gapY)
+    # print('ph',pipeHeight)
+    # print()
 
     return [
         {'x': pipeX, 'y': gapY - pipeHeight},  # upper pipe
-        {'x': pipeX, 'y': gapY + PIPEGAPSIZE}, # lower pipe
+        {'x': pipeX, 'y': gapY + pipegapsize}, # lower pipe
     ]
 
 
@@ -408,6 +469,45 @@ def showScore(score):
         SCREEN.blit(IMAGES['numbers'][digit], (Xoffset, SCREENHEIGHT * 0.1))
         Xoffset += IMAGES['numbers'][digit].get_width()
 
+def showData(data):
+    y = 430
+    x = 10
+    i = 0
+    for k, v in data.items():
+        text=f'{k}: {v}'
+        draw_text(SCREEN, text, size=12,
+                  color=(0, 0, 0), x=x, y=y)
+        i += 1
+        y += 20
+        if i%4 == 0:
+            x += 100
+            y = 430
+
+def draw_text(surface, text, size, color, x, y, align='nw'):
+    font_name = pygame.font.match_font('arial')
+    font = pygame.font.Font(font_name, size)
+    text_surf = font.render(str(text), True, color)
+    text_rect = text_surf.get_rect()
+    if align == 'nw':
+        text_rect.topleft = (x, y)
+    if align == 'ne':
+        text_rect.topright = (x, y)
+    if align == 'sw':
+        text_rect.bottomleft = (x, y)
+    if align == 'se':
+        text_rect.bottomright = (x, y)
+    if align == 'n':
+        text_rect.midtop = (x, y)
+    if align == 's':
+        text_rect.midbottom = (x, y)
+    if align == 'e':
+        text_rect.midright = (x, y)
+    if align == 'w':
+        text_rect.midleft = (x, y)
+    if align == 'center':
+        text_rect.center = (x, y)
+    surface.blit(text_surf, text_rect)
+
 
 def checkCrash(player, upperPipes, lowerPipes):
     """returns True if player collders with base or pipes."""
@@ -417,6 +517,8 @@ def checkCrash(player, upperPipes, lowerPipes):
 
     # if player crashes into ground
     if player['y'] + player['h'] >= BASEY - 1:
+        return [True, True]
+    elif player['y'] < -10:
         return [True, True]
     else:
 
