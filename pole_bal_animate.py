@@ -81,21 +81,22 @@ def fit_pole_balance(network,
 
     while (abs(x) < track_limit) and (abs(theta) < pole_angle_failure) and (t[0] < max_time):
         y0 = np.array([x,x_vel,theta,theta_vel])
-        
+
         # Network chooses the direction to push
         push = network.activate([x,theta])
-        
+
         if push > .5:
-            force = 10.
+            force = 1.
         else:
-            force = -10.
-            
+            force = -1.
+        #force = push*10
+
         F = makeSystem(force)
         # Simulate system
         x,x_vel,theta,theta_vel = odeint(F,y0,t)[1]
         pole_loc.append((x,theta,t[0]))
         t = np.linspace(t[1],t[1]+time_step,2)
-        
+
     if display:
         fig = plt.figure()
         ax = fig.add_subplot(111, aspect='equal', autoscale_on=False,

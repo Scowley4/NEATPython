@@ -131,9 +131,21 @@ def fit_dparity(network, num_inputs, samples=100):
     fitness = np.sum(Y*outputs)/float(samples)
     return fitness
 
-def fit_flappy(network):
+def fit_flappy_steps(network):
     "Returns time the bird survived"
     fitness = main(network)
+    return fitness
+
+def fit_flappy_fixed(network, gap=90):
+    "Returns time the bird survived"
+    fitness = main(network, [gap])
+    return fitness
+
+def fit_flappy_angle(network):
+    "Returns time the bird survived"
+    #pipegapsizes = list(range(280, 70, -10))
+    pipegapsizes = list(range(277, 97, -10))
+    fitness = main(network, pipegapsizes)
     return fitness
 
 def fit_pole_balance(network,

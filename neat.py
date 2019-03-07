@@ -20,7 +20,7 @@ class NEAT:
 
 class Population:
     """"""
-    def __init__(self, pop_size=150, d_t=3.0, c1=1.0, c2=1.0, c3=0.4,
+    def __init__(self, pop_size=150, d_t=2.0, c1=1.0, c2=1.0, c3=0.4,
                  crossover_rate=.75, interspecies_crossover=0.001):
         self.pop_size = pop_size
         self.d_t = d_t
@@ -34,8 +34,10 @@ class Population:
         self.mate_only_prob = 0.2 # Don't think this is found in the paper, but
                                   # it's in their code...
 
-        self.mutate_add_node_prob = 0.03
-        self.mutate_add_link_prob = 0.05
+        self.mutate_add_node_prob = 0.2
+        self.mutate_add_link_prob = 0.30
+        # self.mutate_add_node_prob = 0.03
+        # self.mutate_add_link_prob = 0.05
         self.mutate_link_weights_prob = 0.8
         self.mutate_toggle_enable_prob = 0.0
         self.mutate_toggle_reenable_prob = 0.0
@@ -68,13 +70,17 @@ class Population:
         self.node_num += 1
         return self.node_num
 
-    def compute_pop_fitness(self, fitness_func):
+    def compute_pop_fitness(self, fitness_func, n=1):
         start = time.time()
         for spec in self.species.values():
             for genome in spec.genomes:
-                network = genome.get_network()
-                genome.fitness = fitness_func(network)
-                print(genome.fitness, end='\t')
+                if len(genome.link_genes) == 0:
+                    fitness = 0
+                else:
+                    network = genome.get_network()
+                    fitness = sum(fitness_func(network) for i in range(n))/n
+                genome.fitness = fitness
+                print(round(genome.fitness, 3), end='\t')
         print()
         print(time.time()-start)
         print()
@@ -94,15 +100,21 @@ class Population:
     def get_total_adj_fitness(self):
         return sum(g.adj_fitness for g in self.all_genomes)
 
-
     def get_average_fitness(self):
-        return self.get_total_fitness()/len(all_genomes)
+        return self.get_total_fitness()/len(self.all_genomes)
 
     def spawn_population_from_genome(self, genome):
         self.node_map = {n.node_id: n for n in genome.node_genes}
         self.node_num = max(self.node_map.keys()) + 1
         self.base_nodes = [n for n in genome.node_genes
                            if n.node_type in [INPUT, OUTPUT, BIAS]]
+
+        links = [LinkGene(l.from_node, l.to_node, l.weight,
+                          self.get_next_innov_num(), l.enabled)
+                 for l in genome.link_genes]
+
+        genome = Genome(self, [n for n in genome.node_genes],
+                        links)
 
         # Make the population just this genome
         self.all_genomes = [genome]
@@ -140,8 +152,8 @@ class Population:
         genesis_genome = Genome(self, nodes=nodes, links=links)
 
         # Add initial links
-        for in_node in in_nodes:
-            genesis_genome.add_specific_link(in_node, out_nodes[0], 0)
+        # for in_node in in_nodes:
+        #     genesis_genome.add_specific_link(in_node, out_nodes[0], 0)
 
         # Make the population just this genome
         self.all_genomes = [genesis_genome]
@@ -222,6 +234,7 @@ class Population:
 
         if self.overall_pop_champ is not None:
             print('BEST', self.overall_pop_champ.fitness)
+            print('GenBest', self.pop_champ.fitness)
         print('Most Nodes', len(self.get_most_nodes().node_genes))
         print('Most Links', len(self.get_most_links().link_genes))
 
@@ -234,6 +247,7 @@ class Population:
 
         tot_adj_fit = self.get_total_adj_fitness()
         print('tot_adj_fit', tot_adj_fit)
+        print('AverageFitness', self.get_average_fitness())
         self.verify_genomes()
 
         total_offspring = 0
@@ -252,16 +266,6 @@ class Population:
             percents.append(percent_offspring)
             sums.append(spec_fitness)
 
-        if total_offspring > 160:
-            print('NUM SPECIES', len(self.species))
-            print(offspring_counts)
-            print(percents)
-            print()
-            print(tot_adj_fit)
-            print(sums)
-            print(len(self.all_genomes))
-            print(sum(len(s) for s in self.species.values()))
-
         print('Reproducing')
         for spec in self.species.values():
             percent_offspring = sum(g.adj_fitness/tot_adj_fit for g in spec.genomes)
@@ -273,6 +277,7 @@ class Population:
 
         self.all_genomes = new_genomes
         print(f'{len(self.all_genomes)} new genomes')
+        self.all_genomes.append(self.pop_champ.copy())
 
         before_n_species = len(self.species)
         print('Speciating')
@@ -284,10 +289,6 @@ class Population:
         print('Computing fitness')
         self.compute_pop_fitness(fitness_func)
         print()
-        if len(self.all_genomes) > 160:
-            sys.exit()
-        if len(self.all_genomes) == 0:
-            pass
 
 
     def get_random_champ(self, weighted=False, spec=None):
@@ -313,7 +314,7 @@ class Population:
         else:
             return np.random.choice(species).get_champion()
 
-    def speciate(self, track=None):
+    def speciate(self):
         """Separates organisms into species.
 
         Checks compatibility of each organism against each spec, using the
@@ -330,8 +331,8 @@ class Population:
 
         for genome in self.all_genomes:
             if genome.species_hint is not None:
-                spec = self.species[genome.species_hint]
-                if spec.is_compatible(genome):
+                spec = self.species.get(genome.species_hint)
+                if spec and spec.is_compatible(genome):
                     spec.add_genome(genome)
                     continue
 
@@ -412,7 +413,8 @@ class Species:
         return random.choice(self.genomes)
 
     def is_compatible(self, genome):
-        return genome.calculate_compatibility(self.champ) < self.pop.d_t
+        compat = genome.calculate_compatibility(self.champ)
+        return compat < self.pop.d_t
 
     def reproduce(self, n_offspring=0):
         # NOTE It looks like they have a mate_only_prob. I haven't been able to
@@ -516,6 +518,7 @@ class Genome:
         self.adj_fitness = -float('inf')
         self.species_hint = None # id of the genome's parent species
         self.super_champ = False # marker for population champion
+        self.gen = self.pop.gen_num
 
 
     def __lt__(self, other):
@@ -567,6 +570,7 @@ class Genome:
         # genetics.cpp:2273
         N = min(n_genes1, n_genes2)
         N = N if max(n_genes1, n_genes2)>20 else 1
+        N = 1
 
         excess = self.get_excess_genes(other)
         disjoint = self.get_disjoint_genes(other)
@@ -583,7 +587,14 @@ class Genome:
 
 
         c1, c2, c3 = self.pop.c1, self.pop.c2, self.pop.c3,
-        return (c1*len(excess) + c2*len(disjoint))/N + c3*W
+        compat = (c1*len(excess) + c2*len(disjoint))/N + c3*W
+
+        disp_w = '{:<7}'.format(round(W, 3))
+
+        #print(f'EXCESS: {len(excess)}''\t'f'DISJOINT: {len(disjoint)}''\t'
+        #      f'W: {disp_w}''\t'f'{compat}')
+
+        return compat
 
     def mutate(self):
         # Add a node

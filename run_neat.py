@@ -20,6 +20,9 @@ def check_random_compatibility(pop, num):
 
 
 pop = Population(pop_size=100)
+pop.spawn_initial_population(10, 1)
+while True:
+    pop.next_epoch(fit_flappy_angle)
 # pop.spawn_initial_population(2, 1)
 # while True:
 #    pop.next_epoch(fit_xor)
@@ -36,12 +39,9 @@ pop = Population(pop_size=100)
 # while True:
 #    pop.next_epoch(fit_nparity)
 
-# pop.spawn_initial_population(4, 1)
+# pop.spawn_initial_population(2, 1)
 # while True:
 #     pop.next_epoch(fit_pole_balance)
 
-pop.spawn_initial_population(10, 1)
-while True:
-    pop.next_epoch(fit_flappy)
 
 
