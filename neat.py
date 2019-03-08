@@ -12,21 +12,25 @@ BIAS = 'bias'
 NEWNODE = 'newnode'
 NEWLINK = 'newlink'
 
-class NEAT:
-    """"""
-    def __init__(self):
-        population = None
-        pass
-
 class Population:
-    """"""
-    def __init__(self, pop_size=150, d_t=2.0, c1=1.0, c2=1.0, c3=0.4,
-                 crossover_rate=.75, interspecies_crossover=0.001):
+    """The outer structure of the NEAT algorithm. Contains all the settings for
+    the algorithm.
+    Algorithm 'run' by using either spawn_initial_population method or
+    initializing from a genome. After this, run next_epoch, passing in the
+    fitness function to evaluate."""
+    def __init__(self, pop_size=150, d_t=2.0,
+                 c1=1.0, c2=1.0, c3=0.4):
         self.pop_size = pop_size
-        self.d_t = d_t
+        self.d_t = d_t # Threshold for distinguising species
         self.c1 = c1 # Excess gene coefficient
         self.c2 = c2 # Disjoin gene coefficient
         self.c3 = c3 # Weight different coefficient
+
+        # Averages the fitness this many times. Should be turned off for
+        # deterministic fitness functions (but is usefull for functions like
+        # flappy bird).
+        self.n_fitness_ave = 3
+
         self.survival_thresh = 0.3
         self.species_dropoff_age = 35 #Not sure about this
         self.mutate_only_prob = 0.25 # From the paper
@@ -34,8 +38,12 @@ class Population:
         self.mate_only_prob = 0.2 # Don't think this is found in the paper, but
                                   # it's in their code...
 
+        # Not sure where/if this is used in their code
+        #crossover_rate=.75
+
         self.mutate_add_node_prob = 0.2
         self.mutate_add_link_prob = 0.30
+        # Original values, turned up to increase mutation
         # self.mutate_add_node_prob = 0.03
         # self.mutate_add_link_prob = 0.05
         self.mutate_link_weights_prob = 0.8
@@ -70,7 +78,7 @@ class Population:
         self.node_num += 1
         return self.node_num
 
-    def compute_pop_fitness(self, fitness_func, n=1):
+    def compute_pop_fitness(self, fitness_func):
         start = time.time()
         for spec in self.species.values():
             for genome in spec.genomes:
@@ -78,21 +86,13 @@ class Population:
                     fitness = 0
                 else:
                     network = genome.get_network()
-                    fitness = sum(fitness_func(network) for i in range(n))/n
+                    fitness = sum(fitness_func(network) for i in
+                    range(self.n_fitness_ave))/self.n_fitness_ave
                 genome.fitness = fitness
                 print(round(genome.fitness, 3), end='\t')
         print()
         print(time.time()-start)
         print()
-
-    # def get_average_fitness(self):
-    #     total_fit = 0
-    #     n = 0
-    #     for spec in self.species:
-    #         for genome in spec.genomes:
-    #             total_fit += genome.fitness
-    #             n += 1
-    #     return total_fit/n
 
     def get_total_fitness(self):
         return sum(g.fitness for g in self.all_genomes)
@@ -224,6 +224,10 @@ class Population:
 
 
     def next_epoch(self, fitness_func):
+        """The main method of the population class. This method updates champs,
+        computes reproduction numbers. Calls reproduce on each species with
+        those numbers. Reorganizes genomes into species. And finally ranks the
+        fitness of individuals."""
         self.gen_innovations = []
         self.gen_num += 1
 
