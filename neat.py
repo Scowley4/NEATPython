@@ -32,7 +32,7 @@ class Population:
         self.n_fitness_ave = 3
 
         self.survival_thresh = 0.3
-        self.species_dropoff_age = 35 #Not sure about this
+        self.species_dropoff_age = 15 #Not sure about this
         self.mutate_only_prob = 0.25 # From the paper
         self.interspecies_mate_rate = 0.001
         self.mate_only_prob = 0.2 # Don't think this is found in the paper, but
@@ -974,10 +974,10 @@ class LinkGene:
         self.innov_num = innov_num
         self.enabled = enabled
 
-        self.attrs = (from_node, to_node, weight, innov_num, enabled)
-
     def copy(self):
-        return LinkGene(*self.attrs)
+        return LinkGene(self.from_node, self.to_node,
+                        self.weight, self.innov_num,
+                        self.enabled)
 
 
 # Potentially just a data class
