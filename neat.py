@@ -18,8 +18,9 @@ class Population:
     Algorithm 'run' by using either spawn_initial_population method or
     initializing from a genome. After this, run next_epoch, passing in the
     fitness function to evaluate."""
-    def __init__(self, pop_size=150, d_t=2.0,
-                 c1=1.0, c2=1.0, c3=0.4):
+    def __init__(self, pop_size=150, d_t=3.0,
+                 c1=1.0, c2=1.0, c3=0.4,
+                 n_fitness_ave=1):
         self.pop_size = pop_size
         self.d_t = d_t # Threshold for distinguising species
         self.c1 = c1 # Excess gene coefficient
@@ -29,7 +30,7 @@ class Population:
         # Averages the fitness this many times. Should be turned off for
         # deterministic fitness functions (but is usefull for functions like
         # flappy bird).
-        self.n_fitness_ave = 3
+        self.n_fitness_ave = n_fitness_ave
 
         self.survival_thresh = 0.3
         self.species_dropoff_age = 15 #Not sure about this
@@ -209,7 +210,7 @@ class Population:
             if len(self.overall_pop_champs) > 1:
                 old = self.overall_pop_champs[-2].fitness
                 new = self.overall_pop_champs[-1].fitness
-                print(f'**Gen: {self.gen_num}\n  PopChamp: {old} -> {new}')
+                print(f'**Gen: {self.gen_num}\n  OverallPopChamp: {old} -> {new}')
 
 
     def update_pop_champ(self):
@@ -963,8 +964,6 @@ class Genome:
 
         return Network(adj_matrix, inputs, outputs, bias)
 
-
-# Potentially just a data class
 class LinkGene:
     """"""
     def __init__(self, from_node, to_node, weight, innov_num, enabled=True):
