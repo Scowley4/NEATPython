@@ -207,6 +207,7 @@ def main(network=None, pipegapsizes=None):
 def mainGame(network=None, pipegapsizes=None):
     i_pipegap = 0
     if pipegapsizes is not None:
+        #print(pipegapsizes)
         pipegapsize = pipegapsizes[i_pipegap]
 
 
@@ -282,6 +283,7 @@ def mainGame(network=None, pipegapsizes=None):
                 if game_settings.getboolean('USETHISPIPEGAP'):
                     pipegapsize = int(game_settings['PIPEGAPSIZE'])
                 if score >= int(game_settings['MAXPOINTS']):
+                    score *= 2
                     playery = -100
                 is_display = game_settings.getboolean('ISDISPLAY')
                 is_show_score = game_settings.getboolean('ISSHOWSCORE') & is_display
@@ -424,7 +426,10 @@ def mainGame(network=None, pipegapsizes=None):
         for pipe in upperPipes:
             pipeMidPos = pipe['x'] + IMAGES['pipe'][0].get_width() / 2
             if pipeMidPos <= playerMidPos < pipeMidPos + 4:
-                score += 50
+                # round up to nearest 100 when pass pipe (awarding 62 or 64
+                # points)
+                #score += 50
+                score = int((score // 100 + 1))*100
                 if is_sound:
                     SOUNDS['point'].play()
         score += 1
