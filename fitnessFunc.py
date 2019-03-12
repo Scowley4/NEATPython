@@ -141,12 +141,26 @@ def fit_flappy_fixed(network, gap=90):
     fitness = main(network, [gap])
     return fitness
 
+def gen_flappy_fitness(ave_fit, pipegapsizes=list(range(276, 85, -4))):
+    if ave_fit > 200 and len(pipegapsizes)>20:
+        pipes = int(ave_fit//200)
+        for _ in range(pipes):
+            pipegapsizes.pop(0)
+        print(f'REMOVED PIPES: {pipes} - max at {pipegapsizes[0]}')
+    def fit(network):
+        fitness = main(network, pipegapsizes)
+        return fitness
+    return fit
+
 def fit_flappy_angle(network):
     "Returns time the bird survived"
     #pipegapsizes = list(range(280, 70, -10))
     pipegapsizes = list(range(277, 97, -10))
     fitness = main(network, pipegapsizes)
     return fitness
+
+#     diff = (280-100) / n_gap_changes
+# {100+(50+38)*i: 280-(diff*i) for i in range(n_gap_changes)}
 
 def fit_pole_balance(network,
                      max_time=120,
