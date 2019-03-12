@@ -80,6 +80,8 @@ class Population:
         return self.node_num
 
     def compute_pop_fitness(self, fitness_func):
+        if fitness_func is None:
+            fitness_func = self.gen_fitness_func(self.ave_fitness)
         start = time.time()
         for spec in self.species.values():
             for genome in spec.genomes:
@@ -252,7 +254,9 @@ class Population:
 
         tot_adj_fit = self.get_total_adj_fitness()
         print('tot_adj_fit', tot_adj_fit)
-        print('AverageFitness', self.get_average_fitness())
+        self.ave_fitness = self.get_average_fitness()
+        print('AverageFitness', self.ave_fitness)
+
         self.verify_genomes()
 
         total_offspring = 0
@@ -855,7 +859,12 @@ class Genome:
                 node_set.add(l.to_node.node_id)
                 nodes.append(l.to_node)
 
-        return Genome(self.pop, nodes=nodes, links=[l.copy() for l in child_genes])
+        child = Genome(self.pop, nodes=nodes,
+                       links=[l.copy() for l in child_genes])
+
+        child.fitness = (p1.fitness + p2.fitness)/2
+
+        return child
 
 
 
